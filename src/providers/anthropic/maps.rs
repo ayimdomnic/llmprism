@@ -7,7 +7,9 @@
 
 use serde_json::json;
 
-use crate::schema::to_json_schema;
+use crate::error::Error;
+use crate::schema::{to_json_schema, Schema};
+use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::request::{TextRequest, ToolChoice};
 use crate::text::response::Step;
 use crate::tool::Tool;
@@ -42,6 +44,51 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
             .map(|tool| to_wire_tool(tool.as_ref()))
             .collect(),
         tool_choice: to_wire_tool_choice(&request.tool_choice, request.tools.is_empty()),
+        stream: None,
+    }
+}
+
+/// Builds a Messages API request for a structured-output call, using
+/// Anthropic's *forced tool call* strategy: since Anthropic has no native
+/// structured-output response format the way OpenAI does, this defines a
+/// single synthetic tool shaped exactly like the requested schema, forces the
+/// model to call it (`tool_choice: {"type": "tool", "name": ...}`), and
+/// [`parse_structured_response`] reads that tool call's `input` back out as
+/// the result -- the model never actually "calls a tool" from the
+/// application's point of view, this is purely a way to get schema-shaped
+/// output.
+pub fn build_structured_request(request: &StructuredRequest) -> MessagesRequest {
+    let system = if request.system_prompts.is_empty() {
+        None
+    } else {
+        Some(request.system_prompts.join("\n\n"))
+    };
+
+    let mut messages = Vec::new();
+    for message in &request.messages {
+        push_message(&mut messages, message);
+    }
+
+    let tool_name = request.schema.name.clone();
+    let description = request
+        .schema
+        .description
+        .clone()
+        .unwrap_or_else(|| "Structured output matching the requested schema.".to_string());
+
+    MessagesRequest {
+        model: request.model.clone(),
+        max_tokens: request.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
+        system,
+        messages,
+        temperature: request.temperature,
+        top_p: request.top_p,
+        tools: vec![MessagesTool {
+            name: tool_name.clone(),
+            description,
+            input_schema: to_json_schema(&Schema::Object(request.schema.clone())),
+        }],
+        tool_choice: Some(json!({"type": "tool", "name": tool_name})),
         stream: None,
     }
 }
@@ -160,6 +207,49 @@ pub fn parse_response(response: MessagesResponse) -> Step {
             rate_limits: Vec::new(),
         },
     }
+}
+
+/// Parses a Messages API response returned for a structured-output request --
+/// the counterpart to [`build_structured_request`]'s forced tool call. The
+/// forced tool's `input` *is* the structured data, already decoded JSON (no
+/// second parse pass needed the way OpenAI's string-encoded `content` needs
+/// one).
+pub fn parse_structured_response(
+    response: MessagesResponse,
+    provider_name: &str,
+) -> Result<StructuredResponse, Error> {
+    let data = response
+        .content
+        .iter()
+        .find_map(|block| match block {
+            ContentBlock::ToolUse { input, .. } => Some(input.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| Error::StructuredDecode {
+            provider: provider_name.to_string(),
+            message: "response contained no tool_use block with the structured output".to_string(),
+        })?;
+
+    // `tool_use` is the success case here -- the model complied with the
+    // forced call -- so it's reported as a normal `Stop`, not `ToolCalls`;
+    // any other stop reason (most notably `max_tokens`, meaning the output may
+    // be truncated/invalid JSON) is preserved via the normal mapping so
+    // callers can still tell something went wrong.
+    let finish_reason = match response.stop_reason.as_deref() {
+        Some("tool_use") => FinishReason::Stop,
+        other => map_finish_reason(other),
+    };
+
+    Ok(StructuredResponse {
+        data,
+        finish_reason,
+        usage: map_usage(response.usage),
+        meta: Meta {
+            id: Some(response.id),
+            model: Some(response.model),
+            rate_limits: Vec::new(),
+        },
+    })
 }
 
 /// Maps a Messages API `stop_reason` to this crate's [`FinishReason`]. Shared

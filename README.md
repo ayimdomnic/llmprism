@@ -32,11 +32,11 @@ thing -- tool calling works exactly the same way either way.
 ## Status
 
 This crate is early and under active development. Text generation -- including
-multi-step tool calling, streaming or not -- works end to end for **OpenAI** and
-**Anthropic**. Structured output, embeddings, images, audio, moderation, and the
-remaining ten providers from the original Prism library are on the roadmap but not
-implemented yet -- see the module-level docs (`cargo doc --open`) for what exists
-today. The public API may still change as more capabilities land.
+multi-step tool calling, streaming or not -- and structured output both work end
+to end for **OpenAI** and **Anthropic**. Embeddings, images, audio, moderation,
+and the remaining ten providers from the original Prism library are on the
+roadmap but not implemented yet -- see the module-level docs (`cargo doc --open`)
+for what exists today. The public API may still change as more capabilities land.
 
 ## Installing
 
@@ -55,17 +55,21 @@ for the providers you actually use. Turn on everything with the `full` feature.
   it for you) and it's the one place application code asks for a provider by name.
   In tests you register a `FakeProvider` under the same name instead -- no other
   code has to change.
-- Every capability (right now, just **Text**) follows the same shape: call a method
-  on the registry to get a fluent builder, chain `.with_*()` calls to describe the
-  request, then call `.generate()` (all at once) or `.stream()` (incrementally,
-  as a `Stream` of events) to actually run it.
+- Every capability (**Text** and **structured output**, so far) follows the same
+  shape: call a method on the registry to get a fluent builder, chain `.with_*()`
+  calls to describe the request, then run it -- `.generate()` (all at once) or
+  `.stream()` (incrementally, as a `Stream` of events) for Text, `.generate()`
+  for structured output.
 - **Tools** are anything implementing the `Tool` trait. Give a request a list of
   tools and `llmprism` handles the whole back-and-forth automatically: if the model
   asks to call a tool, the tool runs, its result is sent back to the model, and this
   repeats (up to `with_max_steps`) until the model produces a final answer.
-- **`Schema`** describes the shape of a tool's arguments (or, later, structured
-  output) in a way every provider understands, without you hand-writing each
-  provider's particular JSON Schema dialect.
+- **`Schema`** describes the shape of a tool's arguments -- or, for
+  `Registry::structured`, the exact shape a reply must match -- in a way every
+  provider understands, without you hand-writing each provider's particular JSON
+  Schema dialect. OpenAI and Anthropic get there differently under the hood (a
+  native enforced response format vs. a forced tool call); you get the same
+  `StructuredResponse` back either way.
 
 Run `cargo doc --open --all-features` for the full reference -- every public type
 has a plain-language explanation of what it's for and, where it helps, a short

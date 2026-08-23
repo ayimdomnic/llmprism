@@ -18,6 +18,7 @@ use crate::client::{build_http_client, ErrorMapper};
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
+use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::{Step, TextRequest};
 use crate::value_objects::{Meta, ToolCall, Usage};
 
@@ -237,6 +238,38 @@ impl Provider for AnthropicProvider {
         };
 
         Ok(stream.boxed())
+    }
+
+    async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
+        let wire_request = maps::build_structured_request(&request);
+
+        let http_response = self
+            .client
+            .post(format!("{}/messages", self.base_url))
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", &self.version)
+            .json(&wire_request)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        let headers = http_response.headers().clone();
+        let body_text = http_response.text().await?;
+
+        if !status.is_success() {
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let wire_response: MessagesResponse =
+            serde_json::from_str(&body_text).map_err(|e| Error::Decode {
+                provider: self.name().to_string(),
+                message: e.to_string(),
+            })?;
+
+        maps::parse_structured_response(wire_response, self.name())
     }
 }
 
