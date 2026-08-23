@@ -177,7 +177,9 @@ isn't enough to catch a feature-gated item that only compiles because some
 
 Before publishing a new version, `cargo publish --dry-run` packages and
 compiles the crate exactly as crates.io would, without actually uploading
-anything.
+anything. See [`scripts/release.sh`](scripts/release.sh) for the actual
+release steps, and [CHANGELOG.md](CHANGELOG.md) for what's shipped in each
+version.
 
 ## License
 
