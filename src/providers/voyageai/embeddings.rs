@@ -12,6 +12,8 @@ use crate::value_objects::{EmbeddingsUsage, Meta};
 pub struct ApiRequest {
     pub input: Vec<String>,
     pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_dimension: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +44,7 @@ pub fn build_request(request: &EmbeddingsRequest) -> ApiRequest {
     ApiRequest {
         input: request.input.clone(),
         model: request.model.clone(),
+        output_dimension: request.dimensions,
     }
 }
 
@@ -64,5 +67,18 @@ pub fn parse_response(mut response: ApiResponse) -> EmbeddingsResponse {
             model: Some(response.model),
             rate_limits: Vec::new(),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_request_passes_dimensions_through_as_output_dimension() {
+        let mut request = EmbeddingsRequest::new("voyage-3-large");
+        request.dimensions = Some(512);
+        let wire_request = build_request(&request);
+        assert_eq!(wire_request.output_dimension, Some(512));
     }
 }

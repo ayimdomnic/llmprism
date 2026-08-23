@@ -22,6 +22,10 @@ pub struct ApiRequest {
     pub n: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +49,8 @@ pub fn build_request(request: &ImagesRequest) -> ApiRequest {
         prompt: request.prompt.clone(),
         n: request.n,
         size: request.size.clone(),
+        quality: request.quality.clone(),
+        style: request.style.clone(),
     }
 }
 
@@ -74,4 +80,21 @@ pub fn parse_response(response: ApiResponse, provider_name: &str) -> Result<Imag
         images,
         meta: Meta::default(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_request_passes_quality_and_style_through() {
+        let mut request = ImagesRequest::new("dall-e-3", "a lighthouse");
+        request.quality = Some("hd".to_string());
+        request.style = Some("vivid".to_string());
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(wire_request.quality.as_deref(), Some("hd"));
+        assert_eq!(wire_request.style.as_deref(), Some("vivid"));
+    }
 }

@@ -17,9 +17,22 @@ pub struct ImagesRequest {
     /// string rather than an enum since valid sizes vary by model and
     /// provider; `None` leaves this up to the provider's own default.
     pub size: Option<String>,
-    /// Escape hatch for provider-specific options this crate doesn't model
-    /// directly yet (style, quality, and so on). Interpretation is entirely
-    /// up to the provider.
+    /// A provider-specific quality string (e.g. OpenAI's `dall-e-3` accepts
+    /// `"standard"`/`"hd"`, while `gpt-image-1` accepts
+    /// `"low"`/`"medium"`/`"high"`/`"auto"`). Kept as a plain string for the
+    /// same reason as `size`; `None` leaves this up to the provider's own
+    /// default.
+    pub quality: Option<String>,
+    /// A provider-specific style string (OpenAI's `dall-e-3` accepts
+    /// `"vivid"`/`"natural"`; most other models have no equivalent concept
+    /// at all). `None` leaves this up to the provider's own default.
+    pub style: Option<String>,
+    /// Extra provider-specific fields to send alongside this request, for
+    /// options this crate doesn't model as a typed field yet. Must be a JSON
+    /// object to have any effect: each of its top-level keys is merged into
+    /// (and, if it collides with one of this crate's own fields, overrides)
+    /// the request body actually sent to the provider. The default,
+    /// `Value::Null`, sends nothing extra.
     pub provider_options: serde_json::Value,
 }
 
@@ -30,6 +43,8 @@ impl ImagesRequest {
             prompt: prompt.into(),
             n: None,
             size: None,
+            quality: None,
+            style: None,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -89,6 +104,21 @@ impl PendingImagesRequest {
     /// provider's default. Valid values depend on the model.
     pub fn with_size(mut self, size: impl Into<String>) -> Self {
         self.request.size = Some(size.into());
+        self
+    }
+
+    /// Requests a specific quality (e.g. `"hd"`) instead of the provider's
+    /// default. Valid values depend on the model.
+    pub fn with_quality(mut self, quality: impl Into<String>) -> Self {
+        self.request.quality = Some(quality.into());
+        self
+    }
+
+    /// Requests a specific style (e.g. `"vivid"`) instead of the provider's
+    /// default. Valid values depend on the model; most models have no
+    /// equivalent concept at all.
+    pub fn with_style(mut self, style: impl Into<String>) -> Self {
+        self.request.style = Some(style.into());
         self
     }
 

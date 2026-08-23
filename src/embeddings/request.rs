@@ -13,9 +13,19 @@ pub struct EmbeddingsRequest {
     /// The text to embed. An embeddings call can process several inputs at
     /// once; [`EmbeddingsResponse::embeddings`] comes back in the same order.
     pub input: Vec<String>,
-    /// Escape hatch for provider-specific options this crate doesn't model
-    /// directly yet (for example, a provider-specific output dimension).
-    /// Interpretation is entirely up to the provider.
+    /// Requests a shorter output vector than the model's default, for models
+    /// that support it (OpenAI's `text-embedding-3-*` models, and VoyageAI's
+    /// newer models). `None` leaves this up to the model's own default;
+    /// asking a model that doesn't support this for a specific dimension
+    /// count is a provider-level error, not something this crate validates
+    /// up front.
+    pub dimensions: Option<u32>,
+    /// Extra provider-specific fields to send alongside this request, for
+    /// options this crate doesn't model as a typed field yet. Must be a JSON
+    /// object to have any effect: each of its top-level keys is merged into
+    /// (and, if it collides with one of this crate's own fields, overrides)
+    /// the request body actually sent to the provider. The default,
+    /// `Value::Null`, sends nothing extra.
     pub provider_options: serde_json::Value,
 }
 
@@ -24,6 +34,7 @@ impl EmbeddingsRequest {
         Self {
             model: model.into(),
             input: Vec::new(),
+            dimensions: None,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -74,6 +85,13 @@ impl PendingEmbeddingsRequest {
     /// several inputs in a single request.
     pub fn with_input(mut self, input: impl Into<String>) -> Self {
         self.request.input.push(input.into());
+        self
+    }
+
+    /// Requests a shorter output vector than the model's default, for
+    /// models that support it.
+    pub fn with_dimensions(mut self, dimensions: u32) -> Self {
+        self.request.dimensions = Some(dimensions);
         self
     }
 
