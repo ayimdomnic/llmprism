@@ -11,6 +11,28 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 Nothing yet.
 
+## [0.1.1] - 2026-08-24
+
+No public API changes -- release hygiene, testing, and documentation only.
+
+### Added
+
+- `rust-version = "1.88"` declared in `Cargo.toml`, verified by actually
+  building against that exact toolchain (the floor comes from transitive
+  dependencies, not this crate's own code).
+- HTTP error-path integration tests (429/413/529/generic/malformed-body
+  handling) against a mocked server, closing a real gap where the full
+  request-to-typed-`Error` path was only ever verified by inspection.
+- CI now also checks the declared MSRV and runs a security-advisory scan on
+  every push/PR.
+- `CONTRIBUTING.md` and GitHub issue templates.
+
+### Changed
+
+- The CI badge is temporarily removed from the README (Actions runs are
+  currently blocked at the account level; a red "failing" badge would
+  misrepresent the actual state of the workflow).
+
 ## [0.1.0] - 2026-08-23
 
 Initial release. `llmprism` is a Rust port of the PHP/Laravel library
@@ -52,5 +74,6 @@ consistent, fluent API.
   provider feature individually, formatting, linting, and documentation
   builds.
 
-[Unreleased]: https://github.com/ayimdomnic/llmprism/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ayimdomnic/llmprism/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ayimdomnic/llmprism/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ayimdomnic/llmprism/releases/tag/v0.1.0
