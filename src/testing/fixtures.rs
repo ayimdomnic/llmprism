@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use serde_json::Value;
 
+use crate::moderation::{ModerationResponse, ModerationResult};
 use crate::structured::StructuredResponse;
 use crate::text::Step;
 use crate::value_objects::{FinishReason, Meta, ToolCall, Usage};
@@ -132,6 +135,70 @@ impl FakeStructuredResponse {
 
 impl From<FakeStructuredResponse> for StructuredResponse {
     fn from(fixture: FakeStructuredResponse) -> Self {
+        fixture.build()
+    }
+}
+
+/// A fluent builder for a canned [`ModerationResponse`], for scripting what a
+/// [`FakeProvider`](super::FakeProvider) should return from a moderation
+/// request in a test.
+///
+/// # Example
+///
+/// ```
+/// use llmprism::testing::FakeModerationResponse;
+///
+/// let response = FakeModerationResponse::new().flagged(true).build();
+/// assert!(response.results[0].flagged);
+/// ```
+pub struct FakeModerationResponse {
+    response: ModerationResponse,
+}
+
+impl FakeModerationResponse {
+    /// Starts a canned response with no results yet.
+    pub fn new() -> Self {
+        Self {
+            response: ModerationResponse {
+                results: Vec::new(),
+                meta: Meta::default(),
+            },
+        }
+    }
+
+    /// Appends a result for the next input, flagged (or not) as given, with no
+    /// specific categories set -- covers the common case of checking a single
+    /// input without needing to spell out a full [`ModerationResult`].
+    pub fn flagged(mut self, flagged: bool) -> Self {
+        self.response.results.push(ModerationResult {
+            flagged,
+            categories: HashMap::new(),
+            category_scores: HashMap::new(),
+        });
+        self
+    }
+
+    /// Appends a fully custom result -- use this when a test needs specific
+    /// categories/scores, or to script results for more than one input.
+    pub fn with_result(mut self, result: ModerationResult) -> Self {
+        self.response.results.push(result);
+        self
+    }
+
+    /// Finishes building and returns the underlying [`ModerationResponse`].
+    pub fn build(self) -> ModerationResponse {
+        self.response
+    }
+}
+
+impl Default for FakeModerationResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<FakeModerationResponse> for ModerationResponse {
+    fn from(fixture: FakeModerationResponse) -> Self {
         fixture.build()
     }
 }

@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use futures::stream::{self, BoxStream, StreamExt};
 
 use crate::error::Error;
+use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
 use crate::structured::{StructuredRequest, StructuredResponse};
@@ -50,12 +51,17 @@ const DEFAULT_STREAM_CHUNK_WORDS: usize = 1;
 /// instead of needing a second, stream-shaped fixture format. By default it
 /// yields one word per [`StreamEvent::TextDelta`]; change that with
 /// [`with_stream_chunk_words`](Self::with_stream_chunk_words).
+///
+/// Every capability keeps its own independent queue (text, structured output,
+/// moderation, and so on) -- a test exercising more than one capability
+/// against the same fake scripts each separately, e.g.
+/// [`respond_with_structured`](Self::respond_with_structured) alongside
+/// [`respond_with`](Self::respond_with).
 pub struct FakeProvider {
     name: String,
-    responses: Mutex<Vec<Step>>,
-    structured_responses: Mutex<Vec<StructuredResponse>>,
-    recorded: Mutex<Vec<TextRequest>>,
-    recorded_structured: Mutex<Vec<StructuredRequest>>,
+    text: ResponseQueue<TextRequest, Step>,
+    structured: ResponseQueue<StructuredRequest, StructuredResponse>,
+    moderation: ResponseQueue<ModerationRequest, ModerationResponse>,
     stream_chunk_words: usize,
 }
 
@@ -65,10 +71,9 @@ impl FakeProvider {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
-            responses: Mutex::new(Vec::new()),
-            structured_responses: Mutex::new(Vec::new()),
-            recorded: Mutex::new(Vec::new()),
-            recorded_structured: Mutex::new(Vec::new()),
+            text: ResponseQueue::new(),
+            structured: ResponseQueue::new(),
+            moderation: ResponseQueue::new(),
             stream_chunk_words: DEFAULT_STREAM_CHUNK_WORDS,
         }
     }
@@ -78,10 +83,7 @@ impl FakeProvider {
     /// test to trigger -- for example, twice if you're testing a single tool
     /// call followed by a final reply.
     pub fn respond_with(self, step: impl Into<Step>) -> Self {
-        self.responses
-            .lock()
-            .expect("fake provider mutex poisoned")
-            .push(step.into());
+        self.text.push(step.into());
         self
     }
 
@@ -91,10 +93,14 @@ impl FakeProvider {
     /// response is a different shape ([`StructuredResponse`], not [`Step`]) --
     /// a test that exercises both capabilities scripts each independently.
     pub fn respond_with_structured(self, response: impl Into<StructuredResponse>) -> Self {
-        self.structured_responses
-            .lock()
-            .expect("fake provider mutex poisoned")
-            .push(response.into());
+        self.structured.push(response.into());
+        self
+    }
+
+    /// Queues one canned moderation response, to be returned the next time
+    /// this provider receives a moderation request.
+    pub fn respond_with_moderation(self, response: impl Into<ModerationResponse>) -> Self {
+        self.moderation.push(response.into());
         self
     }
 
@@ -111,39 +117,20 @@ impl FakeProvider {
     /// useful for asserting on exactly what your code sent (which model, which
     /// messages, which tools, and so on).
     pub fn recorded_requests(&self) -> Vec<TextRequest> {
-        self.recorded
-            .lock()
-            .expect("fake provider mutex poisoned")
-            .clone()
+        self.text.recorded()
     }
 
     /// Returns every structured request this provider actually received, in
     /// order -- the structured-output counterpart to
     /// [`recorded_requests`](Self::recorded_requests).
     pub fn recorded_structured_requests(&self) -> Vec<StructuredRequest> {
-        self.recorded_structured
-            .lock()
-            .expect("fake provider mutex poisoned")
-            .clone()
+        self.structured.recorded()
     }
 
-    /// Records `request` and pops the next canned `Step` off the queue --
-    /// the behavior `text_step` and `stream_text_once` both build on.
-    fn next_step(&self, request: TextRequest) -> Result<Step, Error> {
-        self.recorded
-            .lock()
-            .expect("fake provider mutex poisoned")
-            .push(request);
-
-        let mut responses = self.responses.lock().expect("fake provider mutex poisoned");
-        if responses.is_empty() {
-            panic!(
-                "FakeProvider '{}' received a request but has no more canned responses queued -- \
-                 call .respond_with(...) for every expected round trip",
-                self.name
-            );
-        }
-        Ok(responses.remove(0))
+    /// Returns every moderation request this provider actually received, in
+    /// order.
+    pub fn recorded_moderation_requests(&self) -> Vec<ModerationRequest> {
+        self.moderation.recorded()
     }
 }
 
@@ -154,14 +141,14 @@ impl Provider for FakeProvider {
     }
 
     async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
-        self.next_step(request)
+        Ok(self.text.next(request, &self.name, "text", "respond_with"))
     }
 
     async fn stream_text_once(
         &self,
         request: TextRequest,
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
-        let step = self.next_step(request)?;
+        let step = self.text.next(request, &self.name, "text", "respond_with");
 
         let mut events = vec![StreamEvent::StreamStart {
             meta: step.meta.clone(),
@@ -184,24 +171,68 @@ impl Provider for FakeProvider {
     }
 
     async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
-        self.recorded_structured
+        Ok(self
+            .structured
+            .next(request, &self.name, "structured", "respond_with_structured"))
+    }
+
+    async fn moderation(&self, request: ModerationRequest) -> Result<ModerationResponse, Error> {
+        Ok(self
+            .moderation
+            .next(request, &self.name, "moderation", "respond_with_moderation"))
+    }
+}
+
+/// One capability's queue of canned responses plus a log of the requests it
+/// actually received. Every `Fake*` queue on [`FakeProvider`] is one of these
+/// -- factored out so the "record the request, pop the next canned response,
+/// panic with a clear message if the queue runs out" behavior is written once
+/// instead of once per capability.
+struct ResponseQueue<Req, Resp> {
+    responses: Mutex<Vec<Resp>>,
+    recorded: Mutex<Vec<Req>>,
+}
+
+impl<Req: Clone, Resp> ResponseQueue<Req, Resp> {
+    fn new() -> Self {
+        Self {
+            responses: Mutex::new(Vec::new()),
+            recorded: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn push(&self, response: Resp) {
+        self.responses
+            .lock()
+            .expect("fake provider mutex poisoned")
+            .push(response);
+    }
+
+    fn recorded(&self) -> Vec<Req> {
+        self.recorded
+            .lock()
+            .expect("fake provider mutex poisoned")
+            .clone()
+    }
+
+    /// Records `request` and pops the next canned response off the queue,
+    /// panicking with a message that names the right `respond_with_*` method
+    /// to call if the test under-scripted this provider.
+    fn next(&self, request: Req, provider_name: &str, capability: &str, builder: &str) -> Resp {
+        self.recorded
             .lock()
             .expect("fake provider mutex poisoned")
             .push(request);
 
-        let mut responses = self
-            .structured_responses
-            .lock()
-            .expect("fake provider mutex poisoned");
+        let mut responses = self.responses.lock().expect("fake provider mutex poisoned");
         if responses.is_empty() {
             panic!(
-                "FakeProvider '{}' received a structured request but has no more canned \
-                 structured responses queued -- call .respond_with_structured(...) for every \
+                "FakeProvider '{provider_name}' received a {capability} request but has no \
+                 more canned {capability} responses queued -- call .{builder}(...) for every \
                  expected call",
-                self.name
             );
         }
-        Ok(responses.remove(0))
+        responses.remove(0)
     }
 }
 
