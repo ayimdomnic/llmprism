@@ -1,11 +1,13 @@
 //! The OpenAI provider. Text generation and structured output talk to the
-//! Chat Completions API (`api.openai.com/v1/chat/completions`); moderation
-//! and embeddings each talk to their own separate endpoint (`/v1/moderations`,
-//! `/v1/embeddings` -- see `moderation.rs`/`embeddings.rs`). Enable with the
-//! `openai` Cargo feature.
+//! Chat Completions API (`api.openai.com/v1/chat/completions`); moderation,
+//! embeddings, and image generation each talk to their own separate endpoint
+//! (`/v1/moderations`, `/v1/embeddings`, `/v1/images/generations` -- see
+//! `moderation.rs`/`embeddings.rs`/`images.rs`). Enable with the `openai`
+//! Cargo feature.
 
 mod config;
 mod embeddings;
+mod images;
 mod maps;
 mod moderation;
 mod wire;
@@ -22,6 +24,7 @@ use serde_json::{json, Value};
 use crate::client::{build_http_client, ErrorMapper};
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
+use crate::images::{ImagesRequest, ImagesResponse};
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
@@ -331,6 +334,37 @@ impl Provider for OpenAiProvider {
             })?;
 
         Ok(embeddings::parse_response(wire_response))
+    }
+
+    async fn images(&self, request: ImagesRequest) -> Result<ImagesResponse, Error> {
+        let wire_request = images::build_request(&request);
+
+        let http_response = self
+            .client
+            .post(format!("{}/images/generations", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&wire_request)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        let headers = http_response.headers().clone();
+        let body_text = http_response.text().await?;
+
+        if !status.is_success() {
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let wire_response: images::ApiResponse =
+            serde_json::from_str(&body_text).map_err(|e| Error::Decode {
+                provider: self.name().to_string(),
+                message: e.to_string(),
+            })?;
+
+        images::parse_response(wire_response, self.name())
     }
 }
 

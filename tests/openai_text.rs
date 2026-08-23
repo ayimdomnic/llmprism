@@ -164,3 +164,30 @@ async fn live_embeddings_round_trip() {
         response.embeddings[1].vector.len()
     );
 }
+
+#[tokio::test]
+async fn live_images_round_trip() {
+    let Ok(api_key) = std::env::var("OPENAI_API_KEY") else {
+        eprintln!("skipping live_images_round_trip: OPENAI_API_KEY not set");
+        return;
+    };
+
+    let mut registry = Registry::new();
+    registry.register("openai", OpenAiProvider::new(api_key));
+
+    // dall-e-2 at the smallest size, to keep this test's real cost minimal.
+    let response = registry
+        .images(
+            "openai",
+            "dall-e-2",
+            "A single red apple on a white background.",
+        )
+        .unwrap()
+        .with_count(1)
+        .with_size("256x256")
+        .generate()
+        .await
+        .unwrap();
+
+    assert_eq!(response.images.len(), 1);
+}
