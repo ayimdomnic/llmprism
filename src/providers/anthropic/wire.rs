@@ -46,6 +46,15 @@ pub enum ContentBlock {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         is_error: Option<bool>,
     },
+    /// A content block type this crate doesn't translate yet -- extended
+    /// thinking (`thinking`/`redacted_thinking`), citations, server-side
+    /// tool use, and anything else Anthropic adds later. Without this,
+    /// decoding a response containing one of these would fail outright with
+    /// an `unknown variant` error instead of just ignoring the part this
+    /// crate doesn't understand -- exactly the same reasoning behind
+    /// [`StreamContentBlockStart::Other`], its streaming counterpart.
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Debug, Serialize)]
@@ -174,4 +183,34 @@ pub struct StreamErrorDetail {
     #[serde(rename = "type")]
     pub kind: Option<String>,
     pub message: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A `thinking` block (Claude's extended-thinking output) used to fail
+    /// this whole response's deserialization with an `unknown variant` error,
+    /// since `ContentBlock` had no catch-all the way its streaming
+    /// counterpart already did. It should now decode cleanly, with the
+    /// unrecognized block simply becoming `ContentBlock::Other`.
+    #[test]
+    fn a_response_containing_an_unrecognized_content_block_type_still_decodes() {
+        let json = r#"{
+            "id": "msg_1",
+            "model": "claude-3-5-haiku-20241022",
+            "content": [
+                {"type": "thinking", "thinking": "Let me think...", "signature": "abc"},
+                {"type": "text", "text": "The answer is 4."}
+            ],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        }"#;
+
+        let response: MessagesResponse =
+            serde_json::from_str(json).expect("should decode despite the unrecognized block");
+
+        assert!(matches!(response.content[0], ContentBlock::Other));
+        assert!(matches!(response.content[1], ContentBlock::Text { .. }));
+    }
 }

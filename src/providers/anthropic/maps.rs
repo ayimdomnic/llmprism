@@ -192,7 +192,7 @@ pub fn parse_response(response: MessagesResponse) -> Step {
                 name: name.clone(),
                 arguments: input.clone(),
             }),
-            ContentBlock::ToolResult { .. } => {}
+            ContentBlock::ToolResult { .. } | ContentBlock::Other => {}
         }
     }
 
@@ -275,5 +275,40 @@ pub(crate) fn map_usage(usage: super::wire::MessagesUsage) -> Usage {
         cache_write_tokens: usage.cache_creation_input_tokens,
         cache_read_tokens: usage.cache_read_input_tokens,
         thought_tokens: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::wire::MessagesUsage;
+    use super::*;
+
+    /// A block type this crate doesn't translate (extended thinking, in this
+    /// case) shouldn't stop `parse_response` from reading the text and tool
+    /// calls that *are* recognized in the same response.
+    #[test]
+    fn parse_response_ignores_unrecognized_content_blocks() {
+        let response = MessagesResponse {
+            id: "msg_1".to_string(),
+            model: "claude-3-5-haiku-20241022".to_string(),
+            content: vec![
+                ContentBlock::Other,
+                ContentBlock::Text {
+                    text: "The answer is 4.".to_string(),
+                },
+            ],
+            stop_reason: Some("end_turn".to_string()),
+            usage: MessagesUsage {
+                input_tokens: 10,
+                output_tokens: 5,
+                cache_creation_input_tokens: None,
+                cache_read_input_tokens: None,
+            },
+        };
+
+        let step = parse_response(response);
+
+        assert_eq!(step.text.as_deref(), Some("The answer is 4."));
+        assert!(step.tool_calls.is_empty());
     }
 }
