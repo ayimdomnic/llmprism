@@ -30,4 +30,27 @@ default = []
 http = ["dep:reqwest", "dep:reqwest-middleware", "dep:reqwest-retry", "dep:eventsource-stream"]
 openai = ["http"]
 anthropic = ["http"]
-full = ["openai", "anthropic"]
+
+# The OpenAI-compatible provider family: each reuses `providers::openai`'s
+# request/response handling against a different vendor's base URL, so
+# enabling one of these implies "openai" the same way "openai" implies
+# "http" -- you still only pay to compile in the providers you actually use.
+groq = ["openai"]
+deepseek = ["openai"]
+mistral = ["openai"]
+xai = ["openai"]
+openrouter = ["openai"]
+perplexity = ["openai"]
+zai = ["openai"]
+
+full = [
+    "openai",
+    "anthropic",
+    "groq",
+    "deepseek",
+    "mistral",
+    "xai",
+    "openrouter",
+    "perplexity",
+    "zai",
+]

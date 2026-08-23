@@ -329,12 +329,14 @@ impl Registry {
         Ok(PendingSpeechToTextRequest::new(provider, model, audio))
     }
 
-    /// Builds a registry from the first-party providers that have their API key
-    /// set in the environment -- `OPENAI_API_KEY` for OpenAI, `ANTHROPIC_API_KEY`
-    /// for Anthropic, and so on -- and whose Cargo feature is enabled. A provider
-    /// whose key isn't set is simply left out, rather than causing an error; if you
-    /// then try to use it, you'll get [`Error::UnknownProvider`] at the point of
-    /// use, which is usually clearer than failing at startup.
+    /// Builds a registry from the first-party providers that have their API
+    /// key set in the environment -- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+    /// `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `XAI_API_KEY`,
+    /// `OPENROUTER_API_KEY`, `PERPLEXITY_API_KEY`, `ZAI_API_KEY` -- and whose
+    /// Cargo feature is enabled. A provider whose key isn't set is simply
+    /// left out, rather than causing an error; if you then try to use it,
+    /// you'll get [`Error::UnknownProvider`] at the point of use, which is
+    /// usually clearer than failing at startup.
     ///
     /// This is the fastest way to get started; reach for [`Registry::new`] plus
     /// manual [`register`](Self::register) calls when you want more control (a
@@ -357,6 +359,62 @@ impl Registry {
             registry.register(
                 "anthropic",
                 crate::providers::anthropic::AnthropicProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "groq")]
+        if let Ok(api_key) = std::env::var("GROQ_API_KEY") {
+            registry.register(
+                "groq",
+                crate::providers::openai_compatible::GroqProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "deepseek")]
+        if let Ok(api_key) = std::env::var("DEEPSEEK_API_KEY") {
+            registry.register(
+                "deepseek",
+                crate::providers::openai_compatible::DeepSeekProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "mistral")]
+        if let Ok(api_key) = std::env::var("MISTRAL_API_KEY") {
+            registry.register(
+                "mistral",
+                crate::providers::openai_compatible::MistralProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "xai")]
+        if let Ok(api_key) = std::env::var("XAI_API_KEY") {
+            registry.register(
+                "xai",
+                crate::providers::openai_compatible::XaiProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "openrouter")]
+        if let Ok(api_key) = std::env::var("OPENROUTER_API_KEY") {
+            registry.register(
+                "openrouter",
+                crate::providers::openai_compatible::OpenRouterProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "perplexity")]
+        if let Ok(api_key) = std::env::var("PERPLEXITY_API_KEY") {
+            registry.register(
+                "perplexity",
+                crate::providers::openai_compatible::PerplexityProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "zai")]
+        if let Ok(api_key) = std::env::var("ZAI_API_KEY") {
+            registry.register(
+                "zai",
+                crate::providers::openai_compatible::ZaiProvider::new(api_key),
             );
         }
 

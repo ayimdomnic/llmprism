@@ -10,3 +10,14 @@ pub mod openai;
 
 #[cfg(feature = "anthropic")]
 pub mod anthropic;
+
+#[cfg(any(
+    feature = "groq",
+    feature = "deepseek",
+    feature = "mistral",
+    feature = "xai",
+    feature = "openrouter",
+    feature = "perplexity",
+    feature = "zai",
+))]
+pub mod openai_compatible;
