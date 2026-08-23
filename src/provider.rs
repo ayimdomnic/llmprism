@@ -1,8 +1,10 @@
 //! The [`Provider`] trait -- the interface every LLM backend implements.
 
 use async_trait::async_trait;
+use futures::stream::BoxStream;
 
 use crate::error::Error;
+use crate::stream_event::StreamEvent;
 use crate::text::{Step, TextRequest};
 
 /// A single LLM backend -- OpenAI, Anthropic, or any other service you connect
@@ -65,5 +67,28 @@ pub trait Provider: Send + Sync {
     async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "text"))
+    }
+
+    /// The streaming counterpart to [`text_step`](Self::text_step): performs
+    /// exactly one request/response round trip, but instead of waiting for the
+    /// whole reply, returns a stream that yields [`StreamEvent`]s as they arrive.
+    ///
+    /// Like `text_step`, this only needs to handle a single round trip -- the
+    /// multi-step tool-calling loop for streaming lives once, centrally, in
+    /// [`crate::stream_loop::stream_text`] (what
+    /// [`PendingTextRequest::stream`](crate::text::PendingTextRequest::stream)
+    /// calls), the same way [`crate::tool_loop::run_text`] centralizes it for the
+    /// non-streaming case.
+    ///
+    /// The outer `Result` is for failures that happen before any events can be
+    /// produced at all (e.g. the initial HTTP request itself failing); once the
+    /// stream is returned, each item is its own `Result` so a mid-stream decode
+    /// failure doesn't need to abort the whole method call before it starts.
+    async fn stream_text_once(
+        &self,
+        request: TextRequest,
+    ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "stream_text"))
     }
 }
