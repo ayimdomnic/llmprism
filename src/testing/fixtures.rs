@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::embeddings::{Embedding, EmbeddingsResponse};
+use crate::images::{GeneratedImage, ImagesResponse};
 use crate::moderation::{ModerationResponse, ModerationResult};
 use crate::structured::StructuredResponse;
 use crate::text::Step;
-use crate::value_objects::{EmbeddingsUsage, FinishReason, Meta, ToolCall, Usage};
+use crate::value_objects::{EmbeddingsUsage, FinishReason, MediaData, Meta, ToolCall, Usage};
 
 /// A fluent builder for a canned [`Step`], for scripting what a
 /// [`FakeProvider`](super::FakeProvider) should return in a test.
@@ -259,6 +260,69 @@ impl Default for FakeEmbeddingsResponse {
 
 impl From<FakeEmbeddingsResponse> for EmbeddingsResponse {
     fn from(fixture: FakeEmbeddingsResponse) -> Self {
+        fixture.build()
+    }
+}
+
+/// A fluent builder for a canned [`ImagesResponse`], for scripting what a
+/// [`FakeProvider`](super::FakeProvider) should return from an
+/// image-generation request in a test.
+///
+/// # Example
+///
+/// ```
+/// use llmprism::testing::FakeImagesResponse;
+///
+/// let response = FakeImagesResponse::new().with_url("https://example.com/cat.png").build();
+/// assert_eq!(response.images.len(), 1);
+/// ```
+pub struct FakeImagesResponse {
+    response: ImagesResponse,
+}
+
+impl FakeImagesResponse {
+    /// Starts a canned response with no images yet.
+    pub fn new() -> Self {
+        Self {
+            response: ImagesResponse {
+                images: Vec::new(),
+                meta: Meta::default(),
+            },
+        }
+    }
+
+    /// Appends one image, given as a URL.
+    pub fn with_url(mut self, url: impl Into<String>) -> Self {
+        self.response.images.push(GeneratedImage {
+            data: MediaData::Url(url.into()),
+            revised_prompt: None,
+        });
+        self
+    }
+
+    /// Appends one image, given as base64-encoded data.
+    pub fn with_base64(mut self, data: impl Into<String>) -> Self {
+        self.response.images.push(GeneratedImage {
+            data: MediaData::Base64(data.into()),
+            revised_prompt: None,
+        });
+        self
+    }
+
+    /// Finishes building and returns the underlying [`ImagesResponse`].
+    pub fn build(self) -> ImagesResponse {
+        self.response
+    }
+}
+
+impl Default for FakeImagesResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<FakeImagesResponse> for ImagesResponse {
+    fn from(fixture: FakeImagesResponse) -> Self {
         fixture.build()
     }
 }

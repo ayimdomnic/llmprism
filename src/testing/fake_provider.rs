@@ -5,6 +5,7 @@ use futures::stream::{self, BoxStream, StreamExt};
 
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
+use crate::images::{ImagesRequest, ImagesResponse};
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
@@ -64,6 +65,7 @@ pub struct FakeProvider {
     structured: ResponseQueue<StructuredRequest, StructuredResponse>,
     moderation: ResponseQueue<ModerationRequest, ModerationResponse>,
     embeddings: ResponseQueue<EmbeddingsRequest, EmbeddingsResponse>,
+    images: ResponseQueue<ImagesRequest, ImagesResponse>,
     stream_chunk_words: usize,
 }
 
@@ -77,6 +79,7 @@ impl FakeProvider {
             structured: ResponseQueue::new(),
             moderation: ResponseQueue::new(),
             embeddings: ResponseQueue::new(),
+            images: ResponseQueue::new(),
             stream_chunk_words: DEFAULT_STREAM_CHUNK_WORDS,
         }
     }
@@ -114,6 +117,13 @@ impl FakeProvider {
         self
     }
 
+    /// Queues one canned image-generation response, to be returned the next
+    /// time this provider receives an images request.
+    pub fn respond_with_images(self, response: impl Into<ImagesResponse>) -> Self {
+        self.images.push(response.into());
+        self
+    }
+
     /// Controls how many words [`stream_text_once`](Provider::stream_text_once)
     /// groups into each [`StreamEvent::TextDelta`] it synthesizes from a canned
     /// response's text. Defaults to one word per delta; raise it if a test wants
@@ -147,6 +157,12 @@ impl FakeProvider {
     /// order.
     pub fn recorded_embeddings_requests(&self) -> Vec<EmbeddingsRequest> {
         self.embeddings.recorded()
+    }
+
+    /// Returns every images request this provider actually received, in
+    /// order.
+    pub fn recorded_images_requests(&self) -> Vec<ImagesRequest> {
+        self.images.recorded()
     }
 }
 
@@ -202,6 +218,12 @@ impl Provider for FakeProvider {
         Ok(self
             .embeddings
             .next(request, &self.name, "embeddings", "respond_with_embeddings"))
+    }
+
+    async fn images(&self, request: ImagesRequest) -> Result<ImagesResponse, Error> {
+        Ok(self
+            .images
+            .next(request, &self.name, "images", "respond_with_images"))
     }
 }
 

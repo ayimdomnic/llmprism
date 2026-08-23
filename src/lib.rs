@@ -99,10 +99,10 @@
 //!   provider by name. In tests, you register a [`testing::FakeProvider`] under
 //!   that same name instead, so no other code has to know it's being tested.
 //! - Every capability (today: [`text`] generation, streaming or not,
-//!   [`structured`] output, [`moderation`], and [`embeddings`]; images and
-//!   audio are on the roadmap) follows the same shape: ask the registry for a
-//!   fluent request builder, chain `.with_*()` calls to describe what you
-//!   want, then call an async method like
+//!   [`structured`] output, [`moderation`], [`embeddings`], and
+//!   [`images`]; audio is on the roadmap) follows the same shape: ask the
+//!   registry for a fluent request builder, chain `.with_*()` calls to
+//!   describe what you want, then call an async method like
 //!   [`text::PendingTextRequest::generate`] (or
 //!   [`text::PendingTextRequest::stream`] for incremental output) to run it.
 //!   Not every provider implements every capability -- Anthropic, for
@@ -130,6 +130,7 @@
 
 pub mod embeddings;
 pub mod error;
+pub mod images;
 pub mod moderation;
 pub mod provider;
 pub mod registry;

@@ -5,6 +5,7 @@ use futures::stream::BoxStream;
 
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
+use crate::images::{ImagesRequest, ImagesResponse};
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::stream_event::StreamEvent;
 use crate::structured::{StructuredRequest, StructuredResponse};
@@ -123,5 +124,11 @@ pub trait Provider: Send + Sync {
     async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingsResponse, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "embeddings"))
+    }
+
+    /// Generates one or more images from a text prompt.
+    async fn images(&self, request: ImagesRequest) -> Result<ImagesResponse, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "images"))
     }
 }

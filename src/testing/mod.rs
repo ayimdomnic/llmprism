@@ -7,5 +7,6 @@ pub mod fixtures;
 
 pub use fake_provider::FakeProvider;
 pub use fixtures::{
-    FakeEmbeddingsResponse, FakeModerationResponse, FakeStructuredResponse, FakeTextResponse,
+    FakeEmbeddingsResponse, FakeImagesResponse, FakeModerationResponse, FakeStructuredResponse,
+    FakeTextResponse,
 };
