@@ -2,8 +2,14 @@
 
 [![Crates.io](https://img.shields.io/crates/v/llmprism.svg)](https://crates.io/crates/llmprism)
 [![docs.rs](https://img.shields.io/docsrs/llmprism)](https://docs.rs/llmprism)
-[![CI](https://github.com/ayimdomnic/llmprism/actions/workflows/ci.yml/badge.svg)](https://github.com/ayimdomnic/llmprism/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+<!-- The CI badge is deliberately not shown here: GitHub Actions runs are
+     currently blocked at the account level (no Actions minutes available),
+     which shows as a red "failing" badge even though the workflow itself is
+     fine -- misleading rather than informative. Re-add
+     `[![CI](https://github.com/ayimdomnic/llmprism/actions/workflows/ci.yml/badge.svg)](https://github.com/ayimdomnic/llmprism/actions/workflows/ci.yml)`
+     once Actions access is restored and a run actually completes. -->
 
 `llmprism` is a Rust library for talking to Large Language Model providers -- 13 of
 them, from OpenAI and Anthropic to Gemini, Ollama, and more -- through one
