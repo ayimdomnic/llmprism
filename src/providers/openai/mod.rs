@@ -98,6 +98,32 @@ impl OpenAiProvider {
             client: build_http_client(),
         }
     }
+
+    /// Replaces the underlying HTTP client -- an escape hatch for anything
+    /// [`build_http_client`] doesn't cover: a request timeout (see that
+    /// function's docs for why one isn't set by default), a proxy, a custom
+    /// retry policy, or your application's own middleware.
+    ///
+    /// ```
+    /// # #[cfg(feature = "openai")]
+    /// # {
+    /// use std::time::Duration;
+    ///
+    /// use llmprism::providers::openai::OpenAiProvider;
+    /// use reqwest_middleware::ClientBuilder;
+    ///
+    /// let http_client = reqwest::Client::builder()
+    ///     .connect_timeout(Duration::from_secs(10))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let provider = OpenAiProvider::new("sk-...").with_client(ClientBuilder::new(http_client).build());
+    /// # }
+    /// ```
+    pub fn with_client(mut self, client: ClientWithMiddleware) -> Self {
+        self.client = client;
+        self
+    }
 }
 
 #[async_trait]

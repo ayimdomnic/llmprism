@@ -12,7 +12,7 @@ use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use crate::error::Error;
 use crate::value_objects::RateLimit;
 
-/// Builds the HTTP client every provider sends requests through.
+/// Builds the HTTP client every provider sends requests through by default.
 ///
 /// It automatically retries a small number of times on purely transient
 /// failures -- a dropped connection, a timeout, a generic `5xx` -- so a brief
@@ -23,6 +23,17 @@ use crate::value_objects::RateLimit;
 /// (like how long to wait before retrying) that's more useful surfaced to you as
 /// a specific, inspectable [`Error`] than silently retried away. See
 /// [`ErrorMapper`] for that part.
+///
+/// There's deliberately no overall request timeout here either, even though
+/// that means a hung connection can block a call indefinitely: a blanket
+/// `reqwest` timeout applies to the *entire* request, including reading the
+/// response body, which would incorrectly cut off a legitimate long-lived
+/// streaming reply (see [`Provider::stream_text_once`](crate::Provider::stream_text_once))
+/// partway through. If you want a timeout, build your own client -- most
+/// likely with `.connect_timeout(...)` on the inner [`reqwest::Client`],
+/// which bounds only the initial connection and is safe for streaming -- and
+/// hand it to a provider's `with_client` constructor (every provider that
+/// talks over HTTP has one) instead of using this function.
 pub fn build_http_client() -> ClientWithMiddleware {
     let retry_policy = ExponentialBackoff::builder().build_with_max_retries(2);
     ClientBuilder::new(reqwest::Client::new())

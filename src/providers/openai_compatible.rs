@@ -80,6 +80,17 @@ macro_rules! openai_compatible_provider {
                     inner: OpenAiProvider::with_name_and_base_url($name, api_key, base_url),
                 }
             }
+
+            /// Replaces the underlying HTTP client -- an escape hatch for
+            /// anything [`build_http_client`](crate::client::build_http_client)
+            /// doesn't cover (a request timeout, a proxy, a custom retry
+            /// policy). See
+            /// [`OpenAiProvider::with_client`] for a full example; this
+            /// works the same way.
+            pub fn with_client(mut self, client: reqwest_middleware::ClientWithMiddleware) -> Self {
+                self.inner = self.inner.with_client(client);
+                self
+            }
         }
 
         #[cfg(feature = $feature)]

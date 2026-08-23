@@ -62,6 +62,17 @@ impl ElevenLabsProvider {
             client: build_http_client(),
         }
     }
+
+    /// Replaces the underlying HTTP client -- an escape hatch for anything
+    /// [`build_http_client`] doesn't cover
+    /// (a request timeout, a proxy, a custom retry policy). See
+    /// `OpenAiProvider::with_client`'s docs (not linked here since that type
+    /// only exists with the `openai` feature enabled) for a full example;
+    /// this works the same way.
+    pub fn with_client(mut self, client: ClientWithMiddleware) -> Self {
+        self.client = client;
+        self
+    }
 }
 
 #[async_trait]

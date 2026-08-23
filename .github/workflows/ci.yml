@@ -72,7 +72,7 @@ jobs:
       - run: cargo doc --no-deps
 
   feature-matrix:
-    name: Build (--features ${{ matrix.feature }})
+    name: Build + docs (--features ${{ matrix.feature }})
     runs-on: ubuntu-latest
     # `full` (via the `test` job above) isn't enough on its own to catch every
     # possible mistake: a feature-gated item that only compiles because some
@@ -104,6 +104,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --no-default-features --features ${{ matrix.feature }}
+      # Same reasoning as the `docs` job's plain `cargo doc --no-deps` step,
+      # applied per-feature rather than only to the all-features-off case: a
+      # cfg-gated intra-doc link can resolve under `--all-features` (the
+      # target happens to exist there) while still being broken for anyone
+      # enabling just this one feature. Found several of exactly this shape
+      # while adding the `with_client` escape hatch -- each provider's own
+      # module doc linking to another provider's type that isn't guaranteed
+      # present.
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --no-default-features --features ${{ matrix.feature }} --no-deps
 
   examples:
     name: Examples build and the offline one runs
