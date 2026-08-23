@@ -2,5 +2,8 @@
 //! through one consistent, fluent API. This crate is under active construction --
 //! modules are being added incrementally as each capability lands.
 
+pub mod error;
 pub mod schema;
 pub mod value_objects;
+
+pub use error::Error;
