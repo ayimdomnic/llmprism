@@ -9,6 +9,13 @@ readme = "README.md"
 keywords = ["llm", "ai", "openai", "anthropic", "genai"]
 categories = ["api-bindings", "asynchronous"]
 
+# Nothing is enabled by default (see the crate root docs), but the published
+# docs.rs page should show every provider, not an empty crate -- otherwise
+# the first thing anyone evaluating this crate sees is a page with almost
+# nothing on it.
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }

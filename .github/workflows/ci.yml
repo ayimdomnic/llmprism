@@ -63,6 +63,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --all-features --no-deps
+      # Also check with nothing enabled: an intra-doc link in the crate-root
+      # doc comment (which is always compiled, regardless of features) to a
+      # cfg-gated item is invisible under `--all-features` alone -- the link
+      # resolves there because the item happens to exist -- but breaks for
+      # anyone who runs a plain `cargo doc`/`rust-analyzer` with no features
+      # enabled, which is the default. Caught exactly this way once already.
+      - run: cargo doc --no-deps
 
   feature-matrix:
     name: Build (--features ${{ matrix.feature }})

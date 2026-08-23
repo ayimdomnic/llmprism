@@ -94,10 +94,12 @@
 //!
 //! # How the pieces fit together
 //!
-//! - [`Registry`] is where you register providers -- or let [`Registry::from_env`]
+//! - [`Registry`] is where you register providers -- or let `Registry::from_env`
 //!   do it for you -- and it's the one place your application code asks for a
 //!   provider by name. In tests, you register a [`testing::FakeProvider`] under
 //!   that same name instead, so no other code has to know it's being tested.
+//!   (`from_env` isn't linked above: it only exists once any provider feature
+//!   is enabled, so a doc build with none enabled has nothing to link to.)
 //! - Every capability -- [`text`] generation (streaming or not),
 //!   [`structured`] output, [`moderation`], [`embeddings`], [`images`], and
 //!   [`audio`] (text-to-speech and speech-to-text) -- follows the same shape:
@@ -128,11 +130,10 @@
 //! `openrouter`, `perplexity`, `zai`, `ollama`, `voyageai`, `elevenlabs`,
 //! `gemini`), so a binary that only uses one provider isn't forced to compile
 //! in HTTP client code for the rest. Enable `full` to turn on every provider
-//! at once. `groq` through `zai` all live in [`providers::openai_compatible`]
-//! and cover Text
-//! generation only --
-//! see that
-//! module's docs for why.
+//! at once. `groq` through `zai` all live in `providers::openai_compatible`
+//! (not linked here since that module, like `providers` itself, only exists
+//! once one of its features is enabled) and cover Text generation only --
+//! see that module's own docs (with the relevant feature enabled) for why.
 
 pub mod audio;
 pub mod embeddings;
