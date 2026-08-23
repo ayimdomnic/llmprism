@@ -50,6 +50,7 @@ ollama = ["openai"]
 # OpenAI-compatible family above) these only need "http", not "openai".
 voyageai = ["http"]
 elevenlabs = ["http"]
+gemini = ["http"]
 
 full = [
     "openai",
@@ -64,4 +65,5 @@ full = [
     "ollama",
     "voyageai",
     "elevenlabs",
+    "gemini",
 ]

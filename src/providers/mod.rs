@@ -30,3 +30,6 @@ pub mod voyageai;
 
 #[cfg(feature = "elevenlabs")]
 pub mod elevenlabs;
+
+#[cfg(feature = "gemini")]
+pub mod gemini;

@@ -333,8 +333,8 @@ impl Registry {
     /// key set in the environment -- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
     /// `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `XAI_API_KEY`,
     /// `OPENROUTER_API_KEY`, `PERPLEXITY_API_KEY`, `ZAI_API_KEY`,
-    /// `VOYAGEAI_API_KEY`, `ELEVENLABS_API_KEY` -- and whose Cargo feature is
-    /// enabled. A provider
+    /// `VOYAGEAI_API_KEY`, `ELEVENLABS_API_KEY`, `GEMINI_API_KEY` -- and whose
+    /// Cargo feature is enabled. A provider
     /// whose key isn't set is simply left out, rather than causing an error;
     /// if you then try to use it, you'll get [`Error::UnknownProvider`] at
     /// the point of use, which is usually clearer than failing at startup.
@@ -450,6 +450,14 @@ impl Registry {
             registry.register(
                 "elevenlabs",
                 crate::providers::elevenlabs::ElevenLabsProvider::new(api_key),
+            );
+        }
+
+        #[cfg(feature = "gemini")]
+        if let Ok(api_key) = std::env::var("GEMINI_API_KEY") {
+            registry.register(
+                "gemini",
+                crate::providers::gemini::GeminiProvider::new(api_key),
             );
         }
 
