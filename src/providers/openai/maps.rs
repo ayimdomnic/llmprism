@@ -47,6 +47,7 @@ pub fn build_request(request: &TextRequest) -> ChatRequest {
         stream: None,
         stream_options: None,
         response_format: None,
+        reasoning_effort: request.reasoning_effort.clone(),
     }
 }
 
@@ -85,6 +86,7 @@ pub fn build_structured_request(request: &StructuredRequest) -> ChatRequest {
                 "strict": true,
             }
         })),
+        reasoning_effort: request.reasoning_effort.clone(),
     }
 }
 
@@ -391,5 +393,20 @@ mod tests {
             data: MediaData::Url("https://example.com/cat.png".to_string()),
         };
         assert_eq!(image_url_string(&media), "https://example.com/cat.png");
+    }
+
+    #[test]
+    fn build_request_omits_reasoning_effort_by_default() {
+        let request = TextRequest::new("gpt-4o-mini");
+        let wire_request = build_request(&request);
+        assert!(wire_request.reasoning_effort.is_none());
+    }
+
+    #[test]
+    fn build_request_passes_reasoning_effort_through_when_set() {
+        let mut request = TextRequest::new("o3-mini");
+        request.reasoning_effort = Some("high".to_string());
+        let wire_request = build_request(&request);
+        assert_eq!(wire_request.reasoning_effort.as_deref(), Some("high"));
     }
 }

@@ -29,6 +29,11 @@ pub struct StructuredRequest {
     /// [`TextRequest::cache_system_prompt`](crate::text::TextRequest::cache_system_prompt)
     /// for when this is worth turning on. Defaults to `false`.
     pub cache_system_prompt: bool,
+    /// Sets how much effort a reasoning model spends thinking before
+    /// replying. See
+    /// [`TextRequest::reasoning_effort`](crate::text::TextRequest::reasoning_effort)
+    /// for which providers and models this applies to.
+    pub reasoning_effort: Option<String>,
     /// Extra provider-specific fields to send alongside this request, for
     /// options this crate doesn't model as a typed field yet. Must be a JSON
     /// object to have any effect: each of its top-level keys is merged into
@@ -49,6 +54,7 @@ impl StructuredRequest {
             top_p: None,
             schema,
             cache_system_prompt: false,
+            reasoning_effort: None,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -156,6 +162,15 @@ impl PendingStructuredRequest {
     /// this is worth turning on.
     pub fn with_prompt_caching(mut self) -> Self {
         self.request.cache_system_prompt = true;
+        self
+    }
+
+    /// Sets how much effort a reasoning model spends thinking before
+    /// replying. See
+    /// [`StructuredRequest::reasoning_effort`] for which providers and
+    /// models this applies to.
+    pub fn with_reasoning_effort(mut self, effort: impl Into<String>) -> Self {
+        self.request.reasoning_effort = Some(effort.into());
         self
     }
 

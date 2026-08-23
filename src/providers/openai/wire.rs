@@ -31,6 +31,22 @@ pub struct ChatRequest {
     /// match `schema`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<Value>,
+    /// A reasoning model's effort level (`"minimal"`, `"low"`, `"medium"`,
+    /// `"high"`, and newer values on some models) -- see
+    /// [`TextRequest::reasoning_effort`](crate::text::TextRequest::reasoning_effort).
+    /// Non-reasoning models reject this outright rather than ignoring it, so
+    /// it's only set when the caller explicitly asked for it.
+    ///
+    /// One nuance this crate doesn't handle for you: OpenAI's reasoning
+    /// models want `max_completion_tokens` instead of the `max_tokens` this
+    /// crate otherwise always sends, and reject requests that send the
+    /// latter. If you hit that, leave
+    /// [`with_max_tokens`](crate::text::PendingTextRequest::with_max_tokens)
+    /// unset (so this crate omits `max_tokens` entirely) and set
+    /// `max_completion_tokens` yourself via `provider_options` instead --
+    /// see [`TextRequest::provider_options`](crate::text::TextRequest::provider_options).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

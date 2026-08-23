@@ -21,6 +21,28 @@ pub struct MessagesRequest {
     pub tool_choice: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<ThinkingConfig>,
+}
+
+/// Enables extended thinking -- see [`super::maps::build_request`], which is
+/// the only place this crate ever sets it (Anthropic rejects combining
+/// thinking with a forced tool call, which is how this crate's
+/// `structured`-output strategy works, so it's never set there).
+#[derive(Debug, Serialize)]
+pub struct ThinkingConfig {
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    pub budget_tokens: u32,
+}
+
+impl ThinkingConfig {
+    pub fn enabled(budget_tokens: u32) -> Self {
+        Self {
+            kind: "enabled",
+            budget_tokens,
+        }
+    }
 }
 
 /// The `system` field: a plain string normally, matching the simplest shape

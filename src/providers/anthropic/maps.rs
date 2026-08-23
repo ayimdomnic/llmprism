@@ -19,7 +19,7 @@ use crate::value_objects::{
 
 use super::wire::{
     CacheControl, ContentBlock, MediaSource, MessageParam, MessagesRequest, MessagesResponse,
-    MessagesTool, SystemBlock, SystemPrompt,
+    MessagesTool, SystemBlock, SystemPrompt, ThinkingConfig,
 };
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
@@ -32,9 +32,20 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
         push_message(&mut messages, message);
     }
 
+    // Anthropic rejects a request where `max_tokens` isn't strictly greater
+    // than `thinking.budget_tokens` -- raise it here rather than leaving a
+    // caller who only called `with_thinking_budget` (without also raising
+    // `with_max_tokens` to match) to hit an API error that doesn't explain
+    // the actual constraint.
+    let max_tokens = request.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS);
+    let max_tokens = match request.thinking_budget {
+        Some(budget_tokens) => max_tokens.max(budget_tokens + 1),
+        None => max_tokens,
+    };
+
     MessagesRequest {
         model: request.model.clone(),
-        max_tokens: request.max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
+        max_tokens,
         system,
         messages,
         temperature: request.temperature,
@@ -46,6 +57,7 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
             .collect(),
         tool_choice: to_wire_tool_choice(&request.tool_choice, request.tools.is_empty()),
         stream: None,
+        thinking: request.thinking_budget.map(ThinkingConfig::enabled),
     }
 }
 
@@ -87,6 +99,13 @@ pub fn build_structured_request(request: &StructuredRequest) -> MessagesRequest 
         }],
         tool_choice: Some(json!({"type": "tool", "name": tool_name})),
         stream: None,
+        // Never set here: Anthropic rejects combining extended thinking with
+        // a forced tool call, which is exactly the strategy this function
+        // uses to get schema-shaped output -- see
+        // `TextRequest::thinking_budget`'s doc comment (there's no
+        // `thinking_budget` field on `StructuredRequest` at all, for the
+        // same reason).
+        thinking: None,
     }
 }
 
@@ -436,5 +455,61 @@ mod tests {
     #[test]
     fn build_system_is_none_with_no_system_prompts_even_when_caching_is_on() {
         assert!(build_system(&[], true).is_none());
+    }
+
+    #[test]
+    fn build_request_sends_no_thinking_config_by_default() {
+        let request = TextRequest::new("claude-3-5-haiku-20241022");
+        let wire_request = build_request(&request);
+        assert!(wire_request.thinking.is_none());
+        assert_eq!(wire_request.max_tokens, DEFAULT_MAX_TOKENS);
+    }
+
+    #[test]
+    fn build_request_sends_thinking_config_when_a_budget_is_set() {
+        let mut request = TextRequest::new("claude-3-5-haiku-20241022");
+        request.thinking_budget = Some(2000);
+
+        let wire_request = build_request(&request);
+
+        assert!(wire_request.thinking.is_some());
+        assert_eq!(wire_request.thinking.unwrap().budget_tokens, 2000);
+    }
+
+    #[test]
+    fn build_request_raises_max_tokens_above_an_unmet_thinking_budget() {
+        // The default max_tokens (4096) isn't enough headroom above a
+        // larger thinking budget -- Anthropic requires max_tokens to be
+        // strictly greater than budget_tokens, so this should get raised
+        // rather than sent as-is and rejected by the API.
+        let mut request = TextRequest::new("claude-3-5-haiku-20241022");
+        request.thinking_budget = Some(8000);
+
+        let wire_request = build_request(&request);
+
+        assert!(wire_request.max_tokens > 8000);
+    }
+
+    #[test]
+    fn build_request_respects_an_explicit_max_tokens_already_above_the_budget() {
+        let mut request = TextRequest::new("claude-3-5-haiku-20241022");
+        request.max_tokens = Some(20_000);
+        request.thinking_budget = Some(8000);
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(wire_request.max_tokens, 20_000);
+    }
+
+    #[test]
+    fn build_structured_request_never_sets_thinking_even_if_requested() {
+        // `StructuredRequest` has no `thinking_budget` field at all -- this
+        // just confirms the wire request's `thinking` stays `None`
+        // regardless, since it's forced-tool-call under the hood and
+        // Anthropic rejects combining that with extended thinking.
+        let schema = crate::schema::ObjectSchema::new("answer");
+        let request = StructuredRequest::new("claude-3-5-haiku-20241022", schema);
+        let wire_request = build_structured_request(&request);
+        assert!(wire_request.thinking.is_none());
     }
 }

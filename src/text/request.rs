@@ -85,6 +85,26 @@ pub struct TextRequest {
     /// hits it, within the provider's cache lifetime. Defaults to `false`;
     /// see [`with_prompt_caching`](PendingTextRequest::with_prompt_caching).
     pub cache_system_prompt: bool,
+    /// Enables Claude's extended thinking, capping how many tokens it may
+    /// spend on internal reasoning before writing its visible reply
+    /// (Anthropic only; ignored elsewhere -- and, on Anthropic, only for
+    /// this method: extended thinking is incompatible with the forced tool
+    /// call [`Registry::structured`](crate::Registry::structured) uses
+    /// under the hood, so this has no equivalent on
+    /// [`StructuredRequest`](crate::structured::StructuredRequest)).
+    /// `None` leaves thinking off, matching every other provider's default
+    /// behavior. See
+    /// [`with_thinking_budget`](PendingTextRequest::with_thinking_budget).
+    pub thinking_budget: Option<u32>,
+    /// Sets how much effort a reasoning model spends thinking before
+    /// replying (OpenAI's o-series/GPT-5-class models; ignored elsewhere,
+    /// and most non-reasoning models reject it outright rather than
+    /// ignoring it). Valid values are model-dependent (`"minimal"`,
+    /// `"low"`, `"medium"`, `"high"`, and newer values like `"xhigh"` on
+    /// some models) -- kept as a plain string for the same reason
+    /// `size`/`quality` on an images request are. `None` leaves this up to
+    /// the model's own default.
+    pub reasoning_effort: Option<String>,
     /// Extra provider-specific fields to send alongside this request, for
     /// options this crate doesn't model as a typed field yet. Must be a JSON
     /// object to have any effect: each of its top-level keys is merged into
@@ -109,6 +129,8 @@ impl TextRequest {
             tools: Vec::new(),
             tool_choice: ToolChoice::Auto,
             cache_system_prompt: false,
+            thinking_budget: None,
+            reasoning_effort: None,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -254,6 +276,27 @@ impl PendingTextRequest {
     /// worth turning on.
     pub fn with_prompt_caching(mut self) -> Self {
         self.request.cache_system_prompt = true;
+        self
+    }
+
+    /// Enables Claude's extended thinking, capping its internal reasoning at
+    /// `budget_tokens`. Anthropic requires `max_tokens` to be strictly
+    /// greater than `budget_tokens`; if
+    /// [`with_max_tokens`](Self::with_max_tokens) wasn't called (or was
+    /// called with too small a value), this crate raises the value actually
+    /// sent so the request doesn't fail for a reason that isn't obvious from
+    /// the error alone. See [`TextRequest::thinking_budget`] for the
+    /// `structured`-output caveat.
+    pub fn with_thinking_budget(mut self, budget_tokens: u32) -> Self {
+        self.request.thinking_budget = Some(budget_tokens);
+        self
+    }
+
+    /// Sets how much effort a reasoning model spends thinking before
+    /// replying. See [`TextRequest::reasoning_effort`] for which providers
+    /// and models this applies to.
+    pub fn with_reasoning_effort(mut self, effort: impl Into<String>) -> Self {
+        self.request.reasoning_effort = Some(effort.into());
         self
     }
 
