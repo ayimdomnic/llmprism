@@ -13,6 +13,9 @@ pub mod tool;
 pub mod tool_loop;
 pub mod value_objects;
 
+#[cfg(feature = "http")]
+pub mod client;
+
 pub use error::Error;
 pub use provider::Provider;
 pub use registry::Registry;
