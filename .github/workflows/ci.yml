@@ -1,9 +1,8 @@
 name: CI
 
-# Runs on every push/PR. Nothing here calls a real provider API -- the live
-# smoke tests in tests/openai_text.rs and tests/anthropic_text.rs detect the
-# missing API key env vars and skip themselves, so this workflow needs no
-# secrets to stay green.
+# Runs on every push/PR. Nothing here calls a real provider API -- every live
+# smoke test under tests/ (one per provider) detects its missing API key env
+# var and skips itself, so this workflow needs no secrets to stay green.
 on:
   push:
     branches: [main]
@@ -64,3 +63,51 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --all-features --no-deps
+
+  feature-matrix:
+    name: Build (--features ${{ matrix.feature }})
+    runs-on: ubuntu-latest
+    # `full` (via the `test` job above) isn't enough on its own to catch every
+    # possible mistake: a feature-gated item that only compiles because some
+    # *other* enabled feature happens to pull in what it needs will build fine
+    # under `full` and then break for anyone enabling that feature alone. This
+    # job builds each provider feature completely on its own
+    # (`--no-default-features`, nothing else turned on) to catch that class of
+    # bug -- it's exactly how a real bug during development (a macro applying
+    # `#[cfg(feature = ...)]` to a struct but not the `impl` blocks beside it)
+    # was first caught, and it's cheap enough to just keep doing on every push.
+    strategy:
+      matrix:
+        feature:
+          - openai
+          - anthropic
+          - groq
+          - deepseek
+          - mistral
+          - xai
+          - openrouter
+          - perplexity
+          - zai
+          - ollama
+          - voyageai
+          - elevenlabs
+          - gemini
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --no-default-features --features ${{ matrix.feature }}
+
+  examples:
+    name: Examples build and the offline one runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --examples --features full
+      # The only example that needs no API key at all -- the rest gate on
+      # their provider's key being set and skip themselves the same way the
+      # live smoke tests under tests/ do, so there's nothing more to run here
+      # without secrets this workflow deliberately doesn't have.
+      - run: cargo run --example testing_with_fake_provider

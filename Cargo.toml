@@ -5,6 +5,7 @@ edition = "2021"
 description = "A unified, fluent Rust interface for integrating Large Language Model providers -- a Rust port of the PHP Prism library."
 license = "MIT"
 repository = "https://github.com/ayimdev/llmprism"
+readme = "README.md"
 keywords = ["llm", "ai", "openai", "anthropic", "genai"]
 categories = ["api-bindings", "asynchronous"]
 
