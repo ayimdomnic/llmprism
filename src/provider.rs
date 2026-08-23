@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 
 use crate::error::Error;
+use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::stream_event::StreamEvent;
 use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::{Step, TextRequest};
@@ -106,5 +107,14 @@ pub trait Provider: Send + Sync {
     async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "structured"))
+    }
+
+    /// Checks one or more pieces of text against the provider's content-safety
+    /// classifier. Not every provider has a moderation endpoint -- Anthropic,
+    /// notably, doesn't -- so this defaults to `Error::Unsupported` like every
+    /// other optional capability here.
+    async fn moderation(&self, request: ModerationRequest) -> Result<ModerationResponse, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "moderation"))
     }
 }

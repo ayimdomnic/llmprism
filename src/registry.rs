@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::Error;
+use crate::moderation::PendingModerationRequest;
 use crate::provider::Provider;
 use crate::schema::ObjectSchema;
 use crate::structured::PendingStructuredRequest;
@@ -145,6 +146,42 @@ impl Registry {
     ) -> Result<PendingStructuredRequest, Error> {
         let provider = self.provider(provider_name)?;
         Ok(PendingStructuredRequest::new(provider, model, schema))
+    }
+
+    /// Starts a moderation request against the provider registered under
+    /// `provider_name`, targeting `model`. Add one or more `.with_input(...)`
+    /// calls on the returned builder, then call `.generate()` to run it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnknownProvider`] if `provider_name` isn't registered.
+    /// If the provider itself has no moderation endpoint (Anthropic, for
+    /// instance), `.generate()` on the returned builder will fail with
+    /// [`Error::Unsupported`] instead.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "openai")]
+    /// # async fn example() -> Result<(), llmprism::Error> {
+    /// use llmprism::Registry;
+    ///
+    /// let registry = Registry::from_env();
+    /// let response = registry
+    ///     .moderation("openai", "omni-moderation-latest")?
+    ///     .with_input("Some user-submitted text.")
+    ///     .generate()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn moderation(
+        &self,
+        provider_name: &str,
+        model: impl Into<String>,
+    ) -> Result<PendingModerationRequest, Error> {
+        let provider = self.provider(provider_name)?;
+        Ok(PendingModerationRequest::new(provider, model))
     }
 
     /// Builds a registry from the first-party providers that have their API key

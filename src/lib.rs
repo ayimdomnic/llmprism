@@ -98,12 +98,16 @@
 //!   do it for you -- and it's the one place your application code asks for a
 //!   provider by name. In tests, you register a [`testing::FakeProvider`] under
 //!   that same name instead, so no other code has to know it's being tested.
-//! - Every capability (today: [`text`] generation, streaming or not, and
-//!   [`structured`] output; embeddings, images, audio, and moderation are on
-//!   the roadmap) follows the same shape: ask the registry for a fluent
-//!   request builder, chain `.with_*()` calls to describe what you want, then
-//!   call an async method like [`text::PendingTextRequest::generate`] (or
+//! - Every capability (today: [`text`] generation, streaming or not,
+//!   [`structured`] output, and [`moderation`]; embeddings, images, and audio
+//!   are on the roadmap) follows the same shape: ask the registry for a
+//!   fluent request builder, chain `.with_*()` calls to describe what you
+//!   want, then call an async method like
+//!   [`text::PendingTextRequest::generate`] (or
 //!   [`text::PendingTextRequest::stream`] for incremental output) to run it.
+//!   Not every provider implements every capability -- Anthropic, for
+//!   instance, has no moderation endpoint -- calling one it doesn't returns
+//!   [`Error::Unsupported`] rather than failing to compile.
 //! - [`Tool`] is how you give the model something it can call on your behalf --
 //!   a weather lookup, a database query, anything. Hand a list of tools to a text
 //!   request and `llmprism` handles the entire back-and-forth: if the model asks to
@@ -125,6 +129,7 @@
 //! every provider at once.
 
 pub mod error;
+pub mod moderation;
 pub mod provider;
 pub mod registry;
 pub mod schema;
