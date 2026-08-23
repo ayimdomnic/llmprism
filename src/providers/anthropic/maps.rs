@@ -5,7 +5,7 @@
 //! `user`-role content block (`tool_result`) rather than a separate `tool` role, and
 //! `max_tokens` is mandatory on every request.
 
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::error::Error;
 use crate::schema::{to_json_schema, Schema};
@@ -50,12 +50,11 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
         messages,
         temperature: request.temperature,
         top_p: request.top_p,
-        tools: request
-            .tools
-            .iter()
-            .map(|tool| to_wire_tool(tool.as_ref()))
-            .collect(),
-        tool_choice: to_wire_tool_choice(&request.tool_choice, request.tools.is_empty()),
+        tools: build_tools(&request.tools, &request.provider_tools),
+        tool_choice: to_wire_tool_choice(
+            &request.tool_choice,
+            request.tools.is_empty() && request.provider_tools.is_empty(),
+        ),
         stream: None,
         thinking: request.thinking_budget.map(ThinkingConfig::enabled),
     }
@@ -92,11 +91,12 @@ pub fn build_structured_request(request: &StructuredRequest) -> MessagesRequest 
         messages,
         temperature: request.temperature,
         top_p: request.top_p,
-        tools: vec![MessagesTool {
+        tools: vec![serde_json::to_value(MessagesTool {
             name: tool_name.clone(),
             description,
             input_schema: to_json_schema(&Schema::Object(request.schema.clone())),
-        }],
+        })
+        .expect("MessagesTool always serializes to JSON")],
         tool_choice: Some(json!({"type": "tool", "name": tool_name})),
         stream: None,
         // Never set here: Anthropic rejects combining extended thinking with
@@ -227,6 +227,22 @@ fn to_media_source(media: &Media, default_mime_type: &str) -> MediaSource {
             data: data.clone(),
         },
     }
+}
+
+/// Builds the combined `tools` array: this crate's own [`Tool`]s (each
+/// serialized to its [`MessagesTool`] shape) followed by any provider-native
+/// tools passed through as-is -- both live in the one array Anthropic reads
+/// tool declarations from, so there's no separate field for the latter.
+fn build_tools(tools: &[std::sync::Arc<dyn Tool>], provider_tools: &[Value]) -> Vec<Value> {
+    let mut wire_tools: Vec<Value> = tools
+        .iter()
+        .map(|tool| {
+            serde_json::to_value(to_wire_tool(tool.as_ref()))
+                .expect("MessagesTool always serializes to JSON")
+        })
+        .collect();
+    wire_tools.extend(provider_tools.iter().cloned());
+    wire_tools
 }
 
 fn to_wire_tool(tool: &dyn Tool) -> MessagesTool {
@@ -511,5 +527,34 @@ mod tests {
         let request = StructuredRequest::new("claude-3-5-haiku-20241022", schema);
         let wire_request = build_structured_request(&request);
         assert!(wire_request.thinking.is_none());
+    }
+
+    #[test]
+    fn build_request_appends_provider_tools_alongside_user_tools() {
+        let mut request = TextRequest::new("claude-3-5-haiku-20241022");
+        request.provider_tools = vec![json!({
+            "type": "web_search_20250305",
+            "name": "web_search",
+        })];
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(wire_request.tools.len(), 1);
+        assert_eq!(wire_request.tools[0]["type"], "web_search_20250305");
+    }
+
+    #[test]
+    fn build_request_sends_a_tool_choice_when_only_provider_tools_are_present() {
+        // Regression check: `to_wire_tool_choice`'s "any tools at all"
+        // decision must look at `provider_tools` too, not just user-defined
+        // `tools` -- otherwise a request with only a provider tool attached
+        // would silently omit `tool_choice` even though `ToolChoice::Auto`
+        // is meaningful here (letting the model decide whether to use it).
+        let mut request = TextRequest::new("claude-3-5-haiku-20241022");
+        request.provider_tools = vec![json!({"type": "web_search_20250305", "name": "web_search"})];
+
+        let wire_request = build_request(&request);
+
+        assert!(wire_request.tool_choice.is_some());
     }
 }

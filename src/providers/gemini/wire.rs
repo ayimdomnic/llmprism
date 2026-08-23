@@ -12,8 +12,16 @@ pub struct GenerateContentRequest {
     pub system_instruction: Option<SystemInstruction>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generation_config: Option<GenerationConfig>,
+    /// Both this crate's own [`Tool`](crate::Tool)s (wrapped in one
+    /// `{"functionDeclarations": [...]}` entry) and any provider-native
+    /// tools from
+    /// [`TextRequest::provider_tools`](crate::text::TextRequest::provider_tools)
+    /// (each its own entry, e.g. `{"googleSearch": {}}`) live in this one
+    /// array -- Gemini tells different tool kinds apart by which key is
+    /// present on each entry, the same convention [`Part`] uses for content.
+    /// See [`super::maps::build_tools`].
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<ToolDeclaration>,
+    pub tools: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_config: Option<ToolConfig>,
 }

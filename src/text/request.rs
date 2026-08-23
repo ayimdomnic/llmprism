@@ -73,6 +73,19 @@ pub struct TextRequest {
     pub max_steps: u32,
     /// Tools the model is allowed to call during this request. See [`Tool`].
     pub tools: Vec<Arc<dyn Tool>>,
+    /// Provider-native tools -- built-in, server-side capabilities like web
+    /// search or code execution that the provider itself runs, as opposed to
+    /// a [`Tool`] this crate runs on your behalf. Unlike [`Tool`], there's no
+    /// common shape to give these a typed Rust API: each provider defines
+    /// its own set with its own JSON shape (Anthropic's
+    /// `{"type": "web_search_20250305", "name": "web_search", ...}`,
+    /// Gemini's `{"googleSearch": {}}`, and so on), so each entry here is
+    /// sent through mostly as-is. Supported on Anthropic and Gemini; ignored
+    /// on OpenAI, whose Chat Completions API (the one this crate talks to --
+    /// see the crate root docs) has no equivalent concept, only its newer
+    /// Responses API. See
+    /// [`with_provider_tool`](PendingTextRequest::with_provider_tool).
+    pub provider_tools: Vec<serde_json::Value>,
     /// How much freedom the model has to decide whether to call a tool. See
     /// [`ToolChoice`].
     pub tool_choice: ToolChoice,
@@ -127,6 +140,7 @@ impl TextRequest {
             top_p: None,
             max_steps: 1,
             tools: Vec::new(),
+            provider_tools: Vec::new(),
             tool_choice: ToolChoice::Auto,
             cache_system_prompt: false,
             thinking_budget: None,
@@ -260,6 +274,38 @@ impl PendingTextRequest {
     /// want to reuse it across requests.
     pub fn with_tools(mut self, tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Self {
         self.request.tools.extend(tools);
+        self
+    }
+
+    /// Attaches one provider-native tool -- a built-in, server-side
+    /// capability like web search, in whatever JSON shape the target
+    /// provider expects for it. See [`TextRequest::provider_tools`] for
+    /// which providers support this at all.
+    ///
+    /// ```
+    /// # #[cfg(feature = "anthropic")]
+    /// # {
+    /// use llmprism::providers::anthropic::AnthropicProvider;
+    /// use llmprism::Registry;
+    /// use serde_json::json;
+    ///
+    /// let mut registry = Registry::new();
+    /// registry.register("anthropic", AnthropicProvider::new("sk-ant-..."));
+    ///
+    /// let request = registry
+    ///     .text("anthropic", "claude-sonnet-4-5")
+    ///     .unwrap()
+    ///     .with_prompt("What's the latest Rust release?")
+    ///     .with_provider_tool(json!({
+    ///         "type": "web_search_20250305",
+    ///         "name": "web_search",
+    ///     }))
+    ///     .to_request();
+    /// # assert_eq!(request.provider_tools.len(), 1);
+    /// # }
+    /// ```
+    pub fn with_provider_tool(mut self, tool: serde_json::Value) -> Self {
+        self.request.provider_tools.push(tool);
         self
     }
 

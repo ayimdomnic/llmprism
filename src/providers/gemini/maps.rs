@@ -48,8 +48,11 @@ pub fn build_request(request: &TextRequest) -> GenerateContentRequest {
             response_mime_type: None,
             response_json_schema: None,
         }),
-        tools: build_tools(&request.tools),
-        tool_config: to_wire_tool_config(&request.tool_choice, request.tools.is_empty()),
+        tools: build_tools(&request.tools, &request.provider_tools),
+        tool_config: to_wire_tool_config(
+            &request.tool_choice,
+            request.tools.is_empty() && request.provider_tools.is_empty(),
+        ),
     }
 }
 
@@ -90,16 +93,28 @@ fn build_system_instruction(system_prompts: &[String]) -> Option<SystemInstructi
     }
 }
 
-fn build_tools(tools: &[std::sync::Arc<dyn Tool>]) -> Vec<ToolDeclaration> {
-    if tools.is_empty() {
-        return Vec::new();
+/// Builds the combined `tools` array: this crate's own [`Tool`]s, if any,
+/// wrapped in one `{"functionDeclarations": [...]}` entry, followed by any
+/// provider-native tools passed through as-is (e.g. `{"googleSearch": {}}`)
+/// -- both live in the one array Gemini reads tool declarations from, told
+/// apart by which key is present on each entry.
+fn build_tools(tools: &[std::sync::Arc<dyn Tool>], provider_tools: &[Value]) -> Vec<Value> {
+    let mut wire_tools = Vec::new();
+
+    if !tools.is_empty() {
+        let declaration = ToolDeclaration {
+            function_declarations: tools
+                .iter()
+                .map(|tool| to_wire_tool(tool.as_ref()))
+                .collect(),
+        };
+        wire_tools.push(
+            serde_json::to_value(declaration).expect("ToolDeclaration always serializes to JSON"),
+        );
     }
-    vec![ToolDeclaration {
-        function_declarations: tools
-            .iter()
-            .map(|tool| to_wire_tool(tool.as_ref()))
-            .collect(),
-    }]
+
+    wire_tools.extend(provider_tools.iter().cloned());
+    wire_tools
 }
 
 /// Translates this crate's provider-agnostic [`Media`] into a Gemini part --
@@ -431,5 +446,24 @@ mod tests {
             &parts[4],
             Part::InlineData { inline_data } if inline_data.mime_type == "video/mp4"
         ));
+    }
+
+    #[test]
+    fn build_tools_appends_provider_tools_after_the_function_declarations_entry() {
+        let provider_tools = vec![json!({"googleSearch": {}})];
+        let wire_tools = build_tools(&[], &provider_tools);
+
+        assert_eq!(wire_tools.len(), 1);
+        assert_eq!(wire_tools[0], json!({"googleSearch": {}}));
+    }
+
+    #[test]
+    fn build_request_sends_a_tool_config_when_only_provider_tools_are_present() {
+        let mut request = TextRequest::new("gemini-2.5-flash");
+        request.provider_tools = vec![json!({"googleSearch": {}})];
+
+        let wire_request = build_request(&request);
+
+        assert!(wire_request.tool_config.is_some());
     }
 }

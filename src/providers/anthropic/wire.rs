@@ -15,8 +15,14 @@ pub struct MessagesRequest {
     pub temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
+    /// Both this crate's own [`Tool`](crate::Tool)s (serialized to their
+    /// [`MessagesTool`] shape) and any provider-native tools from
+    /// [`TextRequest::provider_tools`](crate::text::TextRequest::provider_tools)
+    /// live in this one array, since that's the one array Anthropic reads
+    /// tool declarations from -- see
+    /// [`super::maps::build_tools`].
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<MessagesTool>,
+    pub tools: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
