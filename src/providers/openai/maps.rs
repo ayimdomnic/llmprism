@@ -1,0 +1,180 @@
+//! Translates between llmprism's provider-agnostic value objects and OpenAI's Chat
+//! Completions wire format -- ported from Prism's `Providers/OpenAI/Maps/*`.
+
+use serde_json::json;
+
+use crate::schema::to_json_schema;
+use crate::text::request::{TextRequest, ToolChoice};
+use crate::text::response::Step;
+use crate::tool::Tool;
+use crate::value_objects::{
+    FinishReason, MediaPart, Message, Meta, ToolCall, ToolOutcome, ToolResult, Usage,
+};
+
+use super::wire::{
+    ChatChoice, ChatMessage, ChatRequest, ChatResponse, ChatTool, ChatToolCall,
+    ChatToolCallFunction, ChatToolFunction,
+};
+
+pub fn build_request(request: &TextRequest) -> ChatRequest {
+    let mut messages = Vec::new();
+
+    for system_prompt in &request.system_prompts {
+        messages.push(ChatMessage::System {
+            content: system_prompt.clone(),
+        });
+    }
+
+    for message in &request.messages {
+        push_message(&mut messages, message);
+    }
+
+    ChatRequest {
+        model: request.model.clone(),
+        messages,
+        max_tokens: request.max_tokens,
+        temperature: request.temperature,
+        top_p: request.top_p,
+        tools: request
+            .tools
+            .iter()
+            .map(|tool| to_wire_tool(tool.as_ref()))
+            .collect(),
+        tool_choice: to_wire_tool_choice(&request.tool_choice, request.tools.is_empty()),
+    }
+}
+
+fn push_message(messages: &mut Vec<ChatMessage>, message: &Message) {
+    match message {
+        Message::System(system) => messages.push(ChatMessage::System {
+            content: system.content.clone(),
+        }),
+        Message::User(user) => messages.push(ChatMessage::User {
+            content: user_text(user),
+        }),
+        Message::Assistant(assistant) => messages.push(ChatMessage::Assistant {
+            content: assistant.content.clone(),
+            tool_calls: assistant.tool_calls.iter().map(to_wire_tool_call).collect(),
+        }),
+        Message::ToolResult(tool_result) => {
+            for result in &tool_result.tool_results {
+                messages.push(ChatMessage::Tool {
+                    tool_call_id: result.tool_call_id.clone(),
+                    content: tool_result_text(result),
+                });
+            }
+        }
+    }
+}
+
+fn user_text(user: &crate::value_objects::UserMessage) -> String {
+    user.content
+        .iter()
+        .filter_map(|part| match part {
+            MediaPart::Text(text) => Some(text.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn tool_result_text(result: &ToolResult) -> String {
+    match &result.result {
+        ToolOutcome::Output(output) => output.content.clone(),
+        ToolOutcome::Error(message) => message.clone(),
+    }
+}
+
+fn to_wire_tool_call(call: &ToolCall) -> ChatToolCall {
+    ChatToolCall {
+        id: call.id.clone(),
+        kind: "function".to_string(),
+        function: ChatToolCallFunction {
+            name: call.name.clone(),
+            arguments: call.arguments.to_string(),
+        },
+    }
+}
+
+fn to_wire_tool(tool: &dyn Tool) -> ChatTool {
+    ChatTool {
+        kind: "function",
+        function: ChatToolFunction {
+            name: tool.name().to_string(),
+            description: tool.description().to_string(),
+            parameters: to_json_schema(&crate::schema::Schema::Object(tool.parameters().clone())),
+        },
+    }
+}
+
+fn to_wire_tool_choice(choice: &ToolChoice, no_tools: bool) -> Option<serde_json::Value> {
+    if no_tools {
+        return None;
+    }
+    match choice {
+        ToolChoice::Auto => Some(json!("auto")),
+        ToolChoice::None => Some(json!("none")),
+        ToolChoice::Any => Some(json!("required")),
+        ToolChoice::Tool(name) => Some(json!({"type": "function", "function": {"name": name}})),
+    }
+}
+
+pub fn parse_response(response: ChatResponse) -> Step {
+    let ChatResponse {
+        id,
+        model,
+        choices,
+        usage,
+    } = response;
+
+    let choice: ChatChoice = choices
+        .into_iter()
+        .next()
+        .expect("chat completion response returns at least one choice");
+
+    let tool_calls: Vec<ToolCall> = choice
+        .message
+        .tool_calls
+        .iter()
+        .map(from_wire_tool_call)
+        .collect();
+
+    let finish_reason = match choice.finish_reason.as_str() {
+        "stop" => FinishReason::Stop,
+        "length" => FinishReason::Length,
+        "tool_calls" => FinishReason::ToolCalls,
+        "content_filter" => FinishReason::ContentFilter,
+        _ => FinishReason::Other,
+    };
+
+    let usage = usage
+        .map(|u| Usage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            cache_write_tokens: None,
+            cache_read_tokens: u.prompt_tokens_details.and_then(|d| d.cached_tokens),
+            thought_tokens: None,
+        })
+        .unwrap_or_default();
+
+    Step {
+        text: choice.message.content,
+        tool_calls,
+        finish_reason,
+        usage,
+        meta: Meta {
+            id: Some(id),
+            model: Some(model),
+            rate_limits: Vec::new(),
+        },
+    }
+}
+
+fn from_wire_tool_call(call: &ChatToolCall) -> ToolCall {
+    ToolCall {
+        id: call.id.clone(),
+        name: call.function.name.clone(),
+        arguments: serde_json::from_str(&call.function.arguments)
+            .unwrap_or(serde_json::Value::Null),
+    }
+}

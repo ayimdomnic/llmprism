@@ -16,6 +16,9 @@ pub mod value_objects;
 #[cfg(feature = "http")]
 pub mod client;
 
+#[cfg(any(feature = "openai", feature = "anthropic"))]
+pub mod providers;
+
 pub use error::Error;
 pub use provider::Provider;
 pub use registry::Registry;

@@ -26,3 +26,4 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"
 [features]
 default = []
 http = ["dep:reqwest", "dep:reqwest-middleware", "dep:reqwest-retry"]
+openai = ["http"]
