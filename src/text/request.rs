@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use futures::stream::Stream;
+use futures::stream::BoxStream;
 
 use crate::error::Error;
 use crate::provider::Provider;
@@ -264,7 +264,7 @@ impl PendingTextRequest {
     /// round trip automatically. The stream ends with exactly one
     /// [`StreamEvent::StreamEnd`], carrying the same final result `generate`
     /// would have returned.
-    pub fn stream(self) -> impl Stream<Item = Result<StreamEvent, Error>> {
+    pub fn stream(self) -> BoxStream<'static, Result<StreamEvent, Error>> {
         crate::stream_loop::stream_text(self.provider, self.request)
     }
 }

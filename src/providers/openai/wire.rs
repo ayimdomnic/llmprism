@@ -18,6 +18,13 @@ pub struct ChatRequest {
     pub tools: Vec<ChatTool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+    /// Only meaningful alongside `stream: Some(true)` -- asks the API to include
+    /// one final chunk carrying token usage, since usage is otherwise omitted
+    /// entirely from a streamed response.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_options: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -104,4 +111,60 @@ pub struct ChatUsage {
 pub struct ChatPromptTokensDetails {
     #[serde(default)]
     pub cached_tokens: Option<u32>,
+}
+
+/// One `data: {...}` chunk from a streamed (`"stream": true`) chat completion.
+/// Every field is optional/defaulted because a single stream is made up of many
+/// of these, each carrying only whatever changed since the last one -- an early
+/// chunk might have a role but no content, a middle chunk a content delta and
+/// nothing else, and (with `stream_options.include_usage`) a final chunk with
+/// `usage` set and an empty `choices` array.
+#[derive(Debug, Deserialize)]
+pub struct ChatStreamChunk {
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub choices: Vec<ChatStreamChoice>,
+    #[serde(default)]
+    pub usage: Option<ChatUsage>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChatStreamChoice {
+    #[serde(default)]
+    pub delta: ChatStreamDelta,
+    #[serde(default)]
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct ChatStreamDelta {
+    #[serde(default)]
+    pub content: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Vec<ChatStreamToolCallDelta>,
+}
+
+/// A tool call as it appears mid-stream: `index` identifies which tool call this
+/// delta belongs to (a single chunk's `tool_calls` array covers all tool calls
+/// in progress, not just one), and `id`/`function.name` typically arrive once,
+/// on the first delta for that index, while `function.arguments` arrives as
+/// many small fragments that must be concatenated in order.
+#[derive(Debug, Deserialize)]
+pub struct ChatStreamToolCallDelta {
+    pub index: usize,
+    #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub function: Option<ChatStreamFunctionDelta>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct ChatStreamFunctionDelta {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub arguments: Option<String>,
 }

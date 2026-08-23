@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use async_stream::try_stream;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::{BoxStream, StreamExt};
 
 use crate::error::Error;
 use crate::provider::Provider;
@@ -22,7 +22,7 @@ use crate::value_objects::{
 ///
 /// This lives once, centrally, for the same reason the non-streaming loop does:
 /// each provider only implements
-/// [`Provider::stream_text_once`](crate::Provider::stream_text_once) -- a single
+/// [`Provider::stream_text_once`] -- a single
 /// round trip -- and this function is what turns that into a full, potentially
 /// multi-step conversation. The whole loop runs inside one
 /// [`async_stream::try_stream!`] generator rather than a function that calls
@@ -33,11 +33,17 @@ use crate::value_objects::{
 /// [`PendingTextRequest::stream`](crate::text::PendingTextRequest::stream) calls
 /// internally; you normally reach this indirectly through that builder rather
 /// than calling it yourself.
+///
+/// Returns a [`BoxStream`] (a boxed, already-pinned stream) rather than `impl
+/// Stream` -- `try_stream!`'s generated type isn't [`Unpin`], which would force
+/// every caller to pin it themselves (with `futures::pin_mut!` or similar)
+/// before calling `.next()`. Boxing it here, once, means callers just get a
+/// stream that works directly.
 pub fn stream_text(
     provider: Arc<dyn Provider>,
     mut request: TextRequest,
-) -> impl Stream<Item = Result<StreamEvent, Error>> {
-    try_stream! {
+) -> BoxStream<'static, Result<StreamEvent, Error>> {
+    let stream = try_stream! {
         let mut steps: Vec<Step> = Vec::new();
 
         loop {
@@ -110,5 +116,7 @@ pub fn stream_text(
             // call a tool forever with no way to ever answer in plain text.
             request.tool_choice = ToolChoice::Auto;
         }
-    }
+    };
+
+    stream.boxed()
 }

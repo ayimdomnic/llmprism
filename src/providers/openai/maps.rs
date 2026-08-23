@@ -41,6 +41,8 @@ pub fn build_request(request: &TextRequest) -> ChatRequest {
             .map(|tool| to_wire_tool(tool.as_ref()))
             .collect(),
         tool_choice: to_wire_tool_choice(&request.tool_choice, request.tools.is_empty()),
+        stream: None,
+        stream_options: None,
     }
 }
 
@@ -139,23 +141,8 @@ pub fn parse_response(response: ChatResponse) -> Step {
         .map(from_wire_tool_call)
         .collect();
 
-    let finish_reason = match choice.finish_reason.as_str() {
-        "stop" => FinishReason::Stop,
-        "length" => FinishReason::Length,
-        "tool_calls" => FinishReason::ToolCalls,
-        "content_filter" => FinishReason::ContentFilter,
-        _ => FinishReason::Other,
-    };
-
-    let usage = usage
-        .map(|u| Usage {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            cache_write_tokens: None,
-            cache_read_tokens: u.prompt_tokens_details.and_then(|d| d.cached_tokens),
-            thought_tokens: None,
-        })
-        .unwrap_or_default();
+    let finish_reason = map_finish_reason(&choice.finish_reason);
+    let usage = usage.map(map_usage).unwrap_or_default();
 
     Step {
         text: choice.message.content,
@@ -176,5 +163,32 @@ fn from_wire_tool_call(call: &ChatToolCall) -> ToolCall {
         name: call.function.name.clone(),
         arguments: serde_json::from_str(&call.function.arguments)
             .unwrap_or(serde_json::Value::Null),
+    }
+}
+
+/// Maps a Chat Completions `finish_reason` string to this crate's
+/// [`FinishReason`]. Shared between the non-streaming response parser above and
+/// the streaming chunk parser in `mod.rs`, since both encounter the exact same
+/// set of strings.
+pub(crate) fn map_finish_reason(finish_reason: &str) -> FinishReason {
+    match finish_reason {
+        "stop" => FinishReason::Stop,
+        "length" => FinishReason::Length,
+        "tool_calls" => FinishReason::ToolCalls,
+        "content_filter" => FinishReason::ContentFilter,
+        _ => FinishReason::Other,
+    }
+}
+
+/// Maps a Chat Completions `usage` object to this crate's [`Usage`]. Shared for
+/// the same reason as [`map_finish_reason`] -- streaming and non-streaming
+/// responses report usage in the identical shape.
+pub(crate) fn map_usage(usage: super::wire::ChatUsage) -> Usage {
+    Usage {
+        prompt_tokens: usage.prompt_tokens,
+        completion_tokens: usage.completion_tokens,
+        cache_write_tokens: None,
+        cache_read_tokens: usage.prompt_tokens_details.and_then(|d| d.cached_tokens),
+        thought_tokens: None,
     }
 }

@@ -6,16 +6,24 @@ mod config;
 mod maps;
 mod wire;
 
+use std::collections::BTreeMap;
+
+use async_stream::try_stream;
 use async_trait::async_trait;
+use eventsource_stream::Eventsource;
+use futures::stream::{BoxStream, StreamExt};
 use reqwest_middleware::ClientWithMiddleware;
+use serde_json::{json, Value};
 
 use crate::client::{build_http_client, ErrorMapper};
 use crate::error::Error;
 use crate::provider::Provider;
+use crate::stream_event::StreamEvent;
 use crate::text::{Step, TextRequest};
+use crate::value_objects::{FinishReason, Meta, ToolCall, Usage};
 
 use self::config::DEFAULT_BASE_URL;
-use self::wire::ChatResponse;
+use self::wire::{ChatResponse, ChatStreamChunk};
 
 /// A [`Provider`] backed by OpenAI's Chat Completions API.
 ///
@@ -94,4 +102,145 @@ impl Provider for OpenAiProvider {
 
         Ok(maps::parse_response(wire_response))
     }
+
+    async fn stream_text_once(
+        &self,
+        request: TextRequest,
+    ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
+        let mut wire_request = maps::build_request(&request);
+        wire_request.stream = Some(true);
+        // Usage is otherwise omitted entirely from a streamed response; this asks
+        // for one extra chunk at the end (empty `choices`, `usage` set) carrying
+        // it, so streaming and non-streaming responses report usage the same way.
+        wire_request.stream_options = Some(json!({"include_usage": true}));
+
+        let http_response = self
+            .client
+            .post(format!("{}/chat/completions", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&wire_request)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        if !status.is_success() {
+            let headers = http_response.headers().clone();
+            let body_text = http_response.text().await?;
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let provider_name = self.name().to_string();
+        let mut events = http_response.bytes_stream().eventsource();
+
+        let stream = try_stream! {
+            let mut tool_calls: BTreeMap<usize, ToolCallAccumulator> = BTreeMap::new();
+            let mut meta_sent = false;
+            let mut finish_reason = FinishReason::Stop;
+            let mut usage = Usage::default();
+
+            while let Some(event) = events.next().await {
+                let event = event.map_err(|e| Error::StreamDecode {
+                    provider: provider_name.clone(),
+                    message: e.to_string(),
+                })?;
+
+                let data = event.data.trim();
+                if data.is_empty() || data == "[DONE]" {
+                    continue;
+                }
+
+                let chunk: ChatStreamChunk =
+                    serde_json::from_str(data).map_err(|e| Error::StreamDecode {
+                        provider: provider_name.clone(),
+                        message: e.to_string(),
+                    })?;
+
+                if !meta_sent {
+                    yield StreamEvent::StreamStart {
+                        meta: Meta {
+                            id: chunk.id.clone(),
+                            model: chunk.model.clone(),
+                            rate_limits: Vec::new(),
+                        },
+                    };
+                    meta_sent = true;
+                }
+
+                if let Some(choice) = chunk.choices.into_iter().next() {
+                    if let Some(content) = choice.delta.content {
+                        if !content.is_empty() {
+                            yield StreamEvent::TextDelta { text: content };
+                        }
+                    }
+
+                    for delta in choice.delta.tool_calls {
+                        let index = delta.index;
+                        let mut arguments_delta = None;
+
+                        {
+                            let entry = tool_calls.entry(index).or_default();
+                            if let Some(id) = delta.id {
+                                entry.id = Some(id);
+                            }
+                            if let Some(function) = delta.function {
+                                if let Some(name) = function.name {
+                                    entry.name = Some(name);
+                                }
+                                if let Some(args) = function.arguments {
+                                    if !args.is_empty() {
+                                        entry.arguments.push_str(&args);
+                                        arguments_delta = Some(args);
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(arguments_delta) = arguments_delta {
+                            let entry = &tool_calls[&index];
+                            yield StreamEvent::ToolCallDelta {
+                                index,
+                                id: entry.id.clone(),
+                                name: entry.name.clone(),
+                                arguments_delta,
+                            };
+                        }
+                    }
+
+                    if let Some(fr) = choice.finish_reason {
+                        finish_reason = maps::map_finish_reason(&fr);
+                    }
+                }
+
+                if let Some(chunk_usage) = chunk.usage {
+                    usage = maps::map_usage(chunk_usage);
+                }
+            }
+
+            for (_, accumulated) in tool_calls {
+                yield StreamEvent::ToolCall(ToolCall {
+                    id: accumulated.id.unwrap_or_default(),
+                    name: accumulated.name.unwrap_or_default(),
+                    arguments: serde_json::from_str(&accumulated.arguments).unwrap_or(Value::Null),
+                });
+            }
+
+            yield StreamEvent::StepFinish { usage, finish_reason };
+        };
+
+        Ok(stream.boxed())
+    }
+}
+
+/// Accumulates one tool call's `id`/`name`/`arguments` across however many
+/// stream chunks it's spread over, keyed by `index` since a single chunk's
+/// `tool_calls` array may contain deltas for several tool calls in progress at
+/// once.
+#[derive(Default)]
+struct ToolCallAccumulator {
+    id: Option<String>,
+    name: Option<String>,
+    arguments: String,
 }
