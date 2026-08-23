@@ -1,7 +1,7 @@
 //! `llmprism` is a Rust library for talking to Large Language Model (LLM) providers
-//! -- OpenAI, Anthropic, and more to come -- through one consistent, fluent API,
-//! instead of learning each provider's own SDK and JSON shape. It's a Rust port of
-//! the PHP/Laravel library [Prism](https://prismphp.com).
+//! -- OpenAI, Anthropic, Gemini, and ten more -- through one consistent, fluent
+//! API, instead of learning each provider's own SDK and JSON shape. It's a Rust
+//! port of the PHP/Laravel library [Prism](https://prismphp.com).
 //!
 //! # A first example
 //!

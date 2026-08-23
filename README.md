@@ -1,9 +1,10 @@
 # llmprism
 
-`llmprism` is a Rust library for talking to Large Language Model providers (OpenAI,
-Anthropic, and more to come) through one consistent, fluent API instead of learning
-each provider's own SDK and JSON shape. It's a Rust port of the PHP/Laravel library
-[Prism](https://prismphp.com), rebuilt around Rust's async ecosystem and type system.
+`llmprism` is a Rust library for talking to Large Language Model providers -- 13 of
+them, from OpenAI and Anthropic to Gemini, Ollama, and more -- through one
+consistent, fluent API instead of learning each provider's own SDK and JSON shape.
+It's a Rust port of the PHP/Laravel library [Prism](https://prismphp.com), rebuilt
+around Rust's async ecosystem and type system.
 
 ```rust,no_run
 use llmprism::Registry;
@@ -31,25 +32,38 @@ thing -- tool calling works exactly the same way either way.
 
 ## Status
 
-This crate is early and under active development. Text generation -- including
-multi-step tool calling, streaming or not -- and structured output both work end
-to end for **OpenAI** and **Anthropic**. Moderation, embeddings, image
-generation, and audio (text-to-speech and speech-to-text) all work for
-**OpenAI** (Anthropic has no equivalent endpoints for any of them). **Groq**,
-**DeepSeek**, **Mistral**, **xAI**, **OpenRouter**, **Perplexity**, and
-**Z.ai** all work for Text generation -- they're thin wrappers around the
-OpenAI provider pointed at each vendor's own OpenAI-compatible endpoint, so
-that's the one capability guaranteed to actually be compatible across all of
-them (see the `providers::openai_compatible` module docs -- `cargo doc --open`
--- for why the other capabilities aren't wired up for this family).
-**VoyageAI** (embeddings only, frequently paired with Anthropic, which has no
-embeddings endpoint of its own) also works. **Ollama** works for Text
-generation and embeddings, needs no API key by default, and (unlike
-`openai_compatible`) is registered by `Registry::from_env()` unconditionally
-rather than only when a key is set. **ElevenLabs** (audio only -- text-to
--speech and speech-to-text) also works. **Gemini** rounds out text
-generation, streaming, tool calling, and structured output alongside OpenAI
-and Anthropic. The public API may still change as more providers land.
+This crate is early (`0.1.0`, pre-1.0) and the public API may still change, but
+every provider and capability in the original scope is implemented. Not every
+provider supports every capability -- a provider's own API has to actually offer
+it -- so here's what works where:
+
+| Provider                                                     | Text + tools + streaming | Structured output | Moderation | Embeddings | Images | Audio |
+| -------------------------------------------------------------| :-----------------------: | :----------------: | :--------: | :--------: | :----: | :---: |
+| **OpenAI**                                                   | ✅                         | ✅                  | ✅          | ✅          | ✅      | ✅     |
+| **Anthropic**                                                | ✅                         | ✅                  |            |            |        |       |
+| **Gemini**                                                   | ✅                         | ✅                  |            |            |        |       |
+| **Groq**, **DeepSeek**, **Mistral**, **xAI**, **OpenRouter**, **Perplexity**, **Z.ai** | ✅ |     |            |            |        |       |
+| **Ollama**                                                   | ✅                         |                     |            | ✅          |        |       |
+| **VoyageAI**                                                 |                            |                     |            | ✅          |        |       |
+| **ElevenLabs**                                                |                            |                     |            |            |        | ✅     |
+
+A few notes on the gaps:
+
+- Anthropic and Gemini simply have no moderation, embeddings, or image
+  endpoints to call -- calling one of those methods on them returns
+  `Error::Unsupported` rather than failing to compile.
+- Groq, DeepSeek, Mistral, xAI, OpenRouter, Perplexity, and Z.ai are thin
+  wrappers around the OpenAI provider pointed at each vendor's own
+  OpenAI-compatible endpoint. Text generation (including tools and streaming)
+  is the one capability guaranteed to actually be compatible across all of
+  them -- see the `providers::openai_compatible` module docs (`cargo doc
+  --open`) for why the rest are deliberately not wired up for this family.
+- Ollama also reuses the OpenAI provider (plus embeddings), needs no API key
+  by default, and -- unlike every other provider -- is registered by
+  `Registry::from_env()` unconditionally rather than only when a key is set.
+- VoyageAI and ElevenLabs are single-capability specialists: VoyageAI does
+  only embeddings (frequently paired with Anthropic, which has none of its
+  own), and ElevenLabs does only text-to-speech and speech-to-text.
 
 ## Installing
 
@@ -94,6 +108,26 @@ Run `cargo doc --open --all-features` for the full reference -- every public typ
 has a plain-language explanation of what it's for and, where it helps, a short
 example.
 
+## Examples
+
+The [`examples/`](examples) directory has five runnable examples: text
+generation, streaming, tool calling, structured output, and testing your own
+code with `FakeProvider` (the only one that needs no API key -- try that one
+first):
+
+```sh
+cargo run --example testing_with_fake_provider
+
+OPENAI_API_KEY=sk-... cargo run --example text_generation --features openai
+OPENAI_API_KEY=sk-... cargo run --example streaming --features openai
+OPENAI_API_KEY=sk-... cargo run --example tool_calling --features openai
+OPENAI_API_KEY=sk-... cargo run --example structured_output --features openai
+```
+
+The four gated examples target OpenAI specifically, but nothing about them is
+OpenAI-specific -- swap the provider name and Cargo feature and they work the
+same way against any other registered provider.
+
 ## Testing your own code against this crate
 
 You don't need real API keys to test code that uses `llmprism`. Register a
@@ -123,15 +157,26 @@ assert_eq!(response.text.as_deref(), Some("Hello!"));
 ## Development
 
 ```sh
-cargo test                    # core crate + tool-calling loop, no network access
-cargo test --features full    # also builds the OpenAI/Anthropic providers
+cargo test                              # core crate + tool-calling loop, no network access
+cargo test --features full              # also builds every provider
 cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
+cargo build --examples --features full
 ```
 
-The live smoke tests in `tests/openai_text.rs` and `tests/anthropic_text.rs` only
-run when `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` are set in your environment; without
-them, they print a note and pass trivially, so CI needs no secrets.
+Every provider has its own live smoke test under `tests/` (`openai_text.rs`,
+`anthropic_text.rs`, `gemini.rs`, and so on) that only runs when that
+provider's API key is set in your environment; without it, the test prints a
+note and passes trivially, so CI needs no secrets. `.github/workflows/ci.yml`
+also builds every provider feature completely on its own
+(`--no-default-features --features X`, one job per provider) -- `full` alone
+isn't enough to catch a feature-gated item that only compiles because some
+*other* enabled feature happens to pull in what it needs.
+
+Before publishing a new version, `cargo publish --dry-run` packages and
+compiles the crate exactly as crates.io would, without actually uploading
+anything.
 
 ## License
 

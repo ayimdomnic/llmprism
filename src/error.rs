@@ -63,15 +63,14 @@ pub enum Error {
     #[error("{provider} request too large: {details}")]
     RequestTooLarge { provider: String, details: String },
 
-    /// While reading a streamed response, a chunk from the provider couldn't be
-    /// parsed. (Reserved for the streaming capability, which isn't implemented
-    /// yet.)
+    /// While reading a streamed response (see
+    /// [`PendingTextRequest::stream`](crate::text::PendingTextRequest::stream)),
+    /// a chunk from the provider couldn't be parsed.
     #[error("failed to decode stream event from {provider}: {message}")]
     StreamDecode { provider: String, message: String },
 
     /// The provider's structured-output response didn't match the schema you
-    /// asked for. (Reserved for the structured-output capability, which isn't
-    /// implemented yet.)
+    /// asked for (see [`Registry::structured`](crate::Registry::structured)).
     #[error("failed to decode structured output from {provider}: {message}")]
     StructuredDecode { provider: String, message: String },
 

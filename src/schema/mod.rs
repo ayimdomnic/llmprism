@@ -1,9 +1,10 @@
 //! Describing the *shape* of data in a way every provider understands.
 //!
-//! Today this is used to describe a [`Tool`](crate::Tool)'s arguments; once
-//! structured output lands, the same [`Schema`] type will describe that too.
-//! Build one from the pieces in this module (start with [`ObjectSchema`] for a
-//! tool's whole argument list), and each provider takes care of translating it
+//! The same [`Schema`] type describes both a [`Tool`](crate::Tool)'s
+//! arguments and a [`structured`](crate::structured)-output request's
+//! required shape. Build one from the pieces in this module (start with
+//! [`ObjectSchema`] for a tool's whole argument list, or a structured
+//! request's top-level shape), and each provider takes care of translating it
 //! into its own particular JSON Schema dialect -- you never write raw JSON
 //! Schema by hand unless you want to, via [`RawSchema`].
 
