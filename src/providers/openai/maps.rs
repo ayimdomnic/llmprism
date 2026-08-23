@@ -3,7 +3,9 @@
 
 use serde_json::json;
 
-use crate::schema::to_json_schema;
+use crate::error::Error;
+use crate::schema::{to_json_schema, Schema};
+use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::request::{TextRequest, ToolChoice};
 use crate::text::response::Step;
 use crate::tool::Tool;
@@ -43,6 +45,45 @@ pub fn build_request(request: &TextRequest) -> ChatRequest {
         tool_choice: to_wire_tool_choice(&request.tool_choice, request.tools.is_empty()),
         stream: None,
         stream_options: None,
+        response_format: None,
+    }
+}
+
+/// Builds a Chat Completions request for a structured-output call, using
+/// OpenAI's native `response_format: {"type": "json_schema", ...}` -- the API
+/// enforces the schema server-side, so (unlike Anthropic's forced-tool-call
+/// strategy) no tool is involved here at all.
+pub fn build_structured_request(request: &StructuredRequest) -> ChatRequest {
+    let mut messages = Vec::new();
+
+    for system_prompt in &request.system_prompts {
+        messages.push(ChatMessage::System {
+            content: system_prompt.clone(),
+        });
+    }
+
+    for message in &request.messages {
+        push_message(&mut messages, message);
+    }
+
+    ChatRequest {
+        model: request.model.clone(),
+        messages,
+        max_tokens: request.max_tokens,
+        temperature: request.temperature,
+        top_p: request.top_p,
+        tools: Vec::new(),
+        tool_choice: None,
+        stream: None,
+        stream_options: None,
+        response_format: Some(json!({
+            "type": "json_schema",
+            "json_schema": {
+                "name": request.schema.name,
+                "schema": to_json_schema(&Schema::Object(request.schema.clone())),
+                "strict": true,
+            }
+        })),
     }
 }
 
@@ -155,6 +196,61 @@ pub fn parse_response(response: ChatResponse) -> Step {
             rate_limits: Vec::new(),
         },
     }
+}
+
+/// Parses a Chat Completions response returned for a structured-output
+/// request. Unlike [`parse_response`], this can fail: `content` is a JSON
+/// *string* here (not already-structured data the way the rest of this crate's
+/// types are), so decoding it is a second, fallible parse pass on top of the
+/// one that already turned the HTTP body into a [`ChatResponse`].
+pub fn parse_structured_response(
+    response: ChatResponse,
+    provider_name: &str,
+) -> Result<StructuredResponse, Error> {
+    let ChatResponse {
+        id,
+        model,
+        choices,
+        usage,
+    } = response;
+
+    let choice: ChatChoice = choices
+        .into_iter()
+        .next()
+        .expect("chat completion response returns at least one choice");
+
+    if let Some(refusal) = choice.message.refusal {
+        return Err(Error::Provider {
+            provider: provider_name.to_string(),
+            status: 0,
+            kind: Some("refusal".to_string()),
+            message: refusal,
+        });
+    }
+
+    let content = choice
+        .message
+        .content
+        .ok_or_else(|| Error::StructuredDecode {
+            provider: provider_name.to_string(),
+            message: "response contained no content".to_string(),
+        })?;
+
+    let data = serde_json::from_str(&content).map_err(|e| Error::StructuredDecode {
+        provider: provider_name.to_string(),
+        message: e.to_string(),
+    })?;
+
+    Ok(StructuredResponse {
+        data,
+        finish_reason: map_finish_reason(&choice.finish_reason),
+        usage: usage.map(map_usage).unwrap_or_default(),
+        meta: Meta {
+            id: Some(id),
+            model: Some(model),
+            rate_limits: Vec::new(),
+        },
+    })
 }
 
 fn from_wire_tool_call(call: &ChatToolCall) -> ToolCall {

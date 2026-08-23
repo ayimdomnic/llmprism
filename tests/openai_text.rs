@@ -6,6 +6,7 @@
 
 use futures::StreamExt;
 use llmprism::providers::openai::OpenAiProvider;
+use llmprism::schema::{NumberSchema, ObjectSchema, Schema, StringSchema};
 use llmprism::stream_event::StreamEvent;
 use llmprism::Registry;
 
@@ -74,4 +75,39 @@ async fn live_stream_generation_round_trip() {
         text.to_lowercase().contains("pong"),
         "expected streamed text to contain 'pong', got: {text}"
     );
+}
+
+#[tokio::test]
+async fn live_structured_generation_round_trip() {
+    let Ok(api_key) = std::env::var("OPENAI_API_KEY") else {
+        eprintln!("skipping live_structured_generation_round_trip: OPENAI_API_KEY not set");
+        return;
+    };
+
+    let mut registry = Registry::new();
+    registry.register("openai", OpenAiProvider::new(api_key));
+
+    let schema = ObjectSchema::new("pong_response")
+        .with_property(
+            Schema::String(StringSchema::new("word").with_description("Always the word 'pong'")),
+            true,
+        )
+        .with_property(
+            Schema::Number(NumberSchema::new("length").with_description("Length of that word")),
+            true,
+        );
+
+    let response = registry
+        .structured("openai", "gpt-4o-mini", schema)
+        .unwrap()
+        .with_prompt("Reply with the word 'pong' and its character length.")
+        .generate()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.data["word"].as_str().map(str::to_lowercase),
+        Some("pong".to_string())
+    );
+    assert_eq!(response.data["length"].as_u64(), Some(4));
 }

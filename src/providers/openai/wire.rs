@@ -25,6 +25,12 @@ pub struct ChatRequest {
     /// entirely from a streamed response.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_options: Option<Value>,
+    /// Set for structured-output requests: `{"type": "json_schema",
+    /// "json_schema": {"name", "schema", "strict"}}`, which OpenAI enforces
+    /// server-side -- the model's reply is guaranteed (not just prompted) to
+    /// match `schema`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -97,6 +103,11 @@ pub struct ChatResponseMessage {
     pub content: Option<String>,
     #[serde(default)]
     pub tool_calls: Vec<ChatToolCall>,
+    /// Set instead of `content` when the model declines to comply with a
+    /// structured-output request (e.g. the request violates OpenAI's usage
+    /// policies) -- only relevant to the structured-output strategy.
+    #[serde(default)]
+    pub refusal: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
