@@ -111,3 +111,28 @@ async fn live_structured_generation_round_trip() {
     );
     assert_eq!(response.data["length"].as_u64(), Some(4));
 }
+
+#[tokio::test]
+async fn live_moderation_round_trip() {
+    let Ok(api_key) = std::env::var("OPENAI_API_KEY") else {
+        eprintln!("skipping live_moderation_round_trip: OPENAI_API_KEY not set");
+        return;
+    };
+
+    let mut registry = Registry::new();
+    registry.register("openai", OpenAiProvider::new(api_key));
+
+    let response = registry
+        .moderation("openai", "omni-moderation-latest")
+        .unwrap()
+        .with_input("The quick brown fox jumps over the lazy dog.")
+        .generate()
+        .await
+        .unwrap();
+
+    assert_eq!(response.results.len(), 1);
+    assert!(
+        !response.results[0].flagged,
+        "expected an innocuous sentence not to be flagged"
+    );
+}

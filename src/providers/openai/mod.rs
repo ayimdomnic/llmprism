@@ -1,9 +1,11 @@
-//! The OpenAI provider, talking to the Chat Completions API
-//! (`api.openai.com/v1/chat/completions`). Enable with the `openai` Cargo
-//! feature.
+//! The OpenAI provider. Text generation and structured output talk to the
+//! Chat Completions API (`api.openai.com/v1/chat/completions`); moderation
+//! talks to the separate Moderation API (`/v1/moderations`, see
+//! `moderation.rs`). Enable with the `openai` Cargo feature.
 
 mod config;
 mod maps;
+mod moderation;
 mod wire;
 
 use std::collections::BTreeMap;
@@ -17,6 +19,7 @@ use serde_json::{json, Value};
 
 use crate::client::{build_http_client, ErrorMapper};
 use crate::error::Error;
+use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
 use crate::structured::{StructuredRequest, StructuredResponse};
@@ -263,6 +266,37 @@ impl Provider for OpenAiProvider {
             })?;
 
         maps::parse_structured_response(wire_response, self.name())
+    }
+
+    async fn moderation(&self, request: ModerationRequest) -> Result<ModerationResponse, Error> {
+        let wire_request = moderation::build_request(&request);
+
+        let http_response = self
+            .client
+            .post(format!("{}/moderations", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&wire_request)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        let headers = http_response.headers().clone();
+        let body_text = http_response.text().await?;
+
+        if !status.is_success() {
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let wire_response: moderation::ApiResponse =
+            serde_json::from_str(&body_text).map_err(|e| Error::Decode {
+                provider: self.name().to_string(),
+                message: e.to_string(),
+            })?;
+
+        Ok(moderation::parse_response(wire_response))
     }
 }
 

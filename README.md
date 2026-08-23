@@ -33,10 +33,11 @@ thing -- tool calling works exactly the same way either way.
 
 This crate is early and under active development. Text generation -- including
 multi-step tool calling, streaming or not -- and structured output both work end
-to end for **OpenAI** and **Anthropic**. Embeddings, images, audio, moderation,
-and the remaining ten providers from the original Prism library are on the
-roadmap but not implemented yet -- see the module-level docs (`cargo doc --open`)
-for what exists today. The public API may still change as more capabilities land.
+to end for **OpenAI** and **Anthropic**. Moderation works for **OpenAI**
+(Anthropic has no moderation endpoint). Embeddings, images, audio, and the
+remaining ten providers from the original Prism library are on the roadmap but
+not implemented yet -- see the module-level docs (`cargo doc --open`) for what
+exists today. The public API may still change as more capabilities land.
 
 ## Installing
 
@@ -55,11 +56,13 @@ for the providers you actually use. Turn on everything with the `full` feature.
   it for you) and it's the one place application code asks for a provider by name.
   In tests you register a `FakeProvider` under the same name instead -- no other
   code has to change.
-- Every capability (**Text** and **structured output**, so far) follows the same
-  shape: call a method on the registry to get a fluent builder, chain `.with_*()`
-  calls to describe the request, then run it -- `.generate()` (all at once) or
-  `.stream()` (incrementally, as a `Stream` of events) for Text, `.generate()`
-  for structured output.
+- Every capability (**Text**, **structured output**, and **moderation**, so
+  far) follows the same shape: call a method on the registry to get a fluent
+  builder, chain `.with_*()` calls to describe the request, then run it --
+  `.generate()` (all at once) or `.stream()` (incrementally, as a `Stream` of
+  events) for Text, `.generate()` for the others. Not every provider
+  implements every capability; calling one that doesn't returns
+  `Error::Unsupported` rather than failing to compile.
 - **Tools** are anything implementing the `Tool` trait. Give a request a list of
   tools and `llmprism` handles the whole back-and-forth automatically: if the model
   asks to call a tool, the tool runs, its result is sent back to the model, and this
