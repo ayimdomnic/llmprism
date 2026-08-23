@@ -27,3 +27,6 @@ pub mod ollama;
 
 #[cfg(feature = "voyageai")]
 pub mod voyageai;
+
+#[cfg(feature = "elevenlabs")]
+pub mod elevenlabs;

@@ -125,10 +125,10 @@
 //!
 //! Nothing is enabled by default. Each provider lives behind its own Cargo feature
 //! flag (`openai`, `anthropic`, `groq`, `deepseek`, `mistral`, `xai`,
-//! `openrouter`, `perplexity`, `zai`, `ollama`, `voyageai`), so a binary that
-//! only uses one provider isn't forced to compile in HTTP client code for the
-//! rest. Enable `full` to turn on every provider at once. `groq` through
-//! `zai` all live in [`providers::openai_compatible`] and cover Text
+//! `openrouter`, `perplexity`, `zai`, `ollama`, `voyageai`, `elevenlabs`), so a
+//! binary that only uses one provider isn't forced to compile in HTTP client
+//! code for the rest. Enable `full` to turn on every provider at once. `groq`
+//! through `zai` all live in [`providers::openai_compatible`] and cover Text
 //! generation only --
 //! see that
 //! module's docs for why.
@@ -153,7 +153,12 @@ pub mod value_objects;
 #[cfg(feature = "http")]
 pub mod client;
 
-#[cfg(any(feature = "openai", feature = "anthropic", feature = "voyageai"))]
+#[cfg(any(
+    feature = "openai",
+    feature = "anthropic",
+    feature = "voyageai",
+    feature = "elevenlabs"
+))]
 pub mod providers;
 
 pub use error::Error;

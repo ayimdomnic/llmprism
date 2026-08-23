@@ -49,6 +49,7 @@ ollama = ["openai"]
 # Native providers -- each with its own wire format, so (unlike the
 # OpenAI-compatible family above) these only need "http", not "openai".
 voyageai = ["http"]
+elevenlabs = ["http"]
 
 full = [
     "openai",
@@ -62,4 +63,5 @@ full = [
     "zai",
     "ollama",
     "voyageai",
+    "elevenlabs",
 ]

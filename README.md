@@ -46,8 +46,9 @@ them (see the `providers::openai_compatible` module docs -- `cargo doc --open`
 embeddings endpoint of its own) also works. **Ollama** works for Text
 generation and embeddings, needs no API key by default, and (unlike
 `openai_compatible`) is registered by `Registry::from_env()` unconditionally
-rather than only when a key is set. Gemini and ElevenLabs remain on the
-roadmap. The public API may still change as more providers land.
+rather than only when a key is set. **ElevenLabs** (audio only -- text-to
+-speech and speech-to-text) also works. Gemini remains on the roadmap. The
+public API may still change as more providers land.
 
 ## Installing
 
@@ -58,9 +59,9 @@ llmprism = { version = "0.1", features = ["openai", "anthropic"] }
 
 Nothing is enabled by default. Every provider lives behind its own Cargo feature
 flag -- `openai`, `anthropic`, `groq`, `deepseek`, `mistral`, `xai`,
-`openrouter`, `perplexity`, `zai`, `ollama`, `voyageai` -- so your binary only
-pulls in the HTTP client and pays the compile-time cost for the providers you
-actually use. Turn on everything with the `full` feature.
+`openrouter`, `perplexity`, `zai`, `ollama`, `voyageai`, `elevenlabs` -- so
+your binary only pulls in the HTTP client and pays the compile-time cost for
+the providers you actually use. Turn on everything with the `full` feature.
 
 ## How it's organized
 
