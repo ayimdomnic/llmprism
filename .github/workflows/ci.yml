@@ -33,6 +33,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-features --all-targets -- -D warnings
 
+  msrv:
+    name: MSRV (Cargo.toml's rust-version)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: echo "version=$(grep -m1 '^rust-version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      # A build, not a full test run: the MSRV promise is "this compiles on
+      # that toolchain", not "every dev-dependency (some of which may have a
+      # higher MSRV than the library itself) does too".
+      - run: cargo build --features full
+
   test:
     name: Test (${{ matrix.features }})
     runs-on: ubuntu-latest
@@ -127,3 +144,12 @@ jobs:
       # live smoke tests under tests/ do, so there's nothing more to run here
       # without secrets this workflow deliberately doesn't have.
       - run: cargo run --example testing_with_fake_provider
+
+  audit:
+    name: Security advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,14 @@
 name = "llmprism"
 version = "0.1.0"
 edition = "2021"
+# Not just this crate's own floor (1.65, for `let-else`) -- the `full`
+# dependency tree's highest self-declared `rust-version` is what actually
+# gates a build, and that comes from the icu_*/idna_adapter crates reqwest
+# pulls in for internationalized domain name support (checked via
+# `cargo metadata --format-version 1 --features full`, sorted by
+# `rust_version`). Re-check that command if bumping dependencies ever lowers
+# or raises this.
+rust-version = "1.88"
 authors = ["Soon To Zen <ayimdomnic@outlook.com>"]
 description = "A unified, fluent Rust interface for integrating Large Language Model providers -- a Rust port of the PHP Prism library."
 license = "MIT"
