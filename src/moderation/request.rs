@@ -13,8 +13,12 @@ pub struct ModerationRequest {
     /// The text to classify. A moderation call can check several inputs at
     /// once; [`ModerationResponse::results`] comes back in the same order.
     pub input: Vec<String>,
-    /// Escape hatch for provider-specific options this crate doesn't model
-    /// directly yet. Interpretation is entirely up to the provider.
+    /// Extra provider-specific fields to send alongside this request, for
+    /// options this crate doesn't model as a typed field yet. Must be a JSON
+    /// object to have any effect: each of its top-level keys is merged into
+    /// (and, if it collides with one of this crate's own fields, overrides)
+    /// the request body actually sent to the provider. The default,
+    /// `Value::Null`, sends nothing extra.
     pub provider_options: serde_json::Value,
 }
 

@@ -9,7 +9,7 @@ mod embeddings;
 use async_trait::async_trait;
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::client::{build_http_client, ErrorMapper};
+use crate::client::{build_http_client, merge_provider_options, ErrorMapper};
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::provider::Provider;
@@ -65,12 +65,13 @@ impl Provider for VoyageAiProvider {
 
     async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingsResponse, Error> {
         let wire_request = embeddings::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/embeddings", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 

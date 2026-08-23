@@ -30,6 +30,54 @@ pub fn build_http_client() -> ClientWithMiddleware {
         .build()
 }
 
+/// Serializes `wire_request` to JSON and shallow-merges `provider_options` on
+/// top of the result, letting a caller add or override any field the
+/// provider's real API accepts that this crate doesn't model as a typed
+/// field -- the mechanism behind every request type's `provider_options`
+/// escape hatch. A `provider_options` that isn't a JSON object (including the
+/// default `Value::Null` every request starts with) is a no-op: nothing is
+/// merged, and `wire_request`'s own fields are sent exactly as built.
+///
+/// Every provider that sends a JSON body calls this instead of serializing
+/// `wire_request` directly, so the escape hatch behaves identically
+/// everywhere rather than working for some providers and silently doing
+/// nothing for others.
+pub fn merge_provider_options<T: serde::Serialize>(
+    wire_request: &T,
+    provider_options: &serde_json::Value,
+) -> Result<serde_json::Value, Error> {
+    let mut body = serde_json::to_value(wire_request)?;
+    if let (Some(base), Some(overrides)) = (body.as_object_mut(), provider_options.as_object()) {
+        for (key, value) in overrides {
+            base.insert(key.clone(), value.clone());
+        }
+    }
+    Ok(body)
+}
+
+/// The `provider_options` escape hatch's counterpart for an endpoint that
+/// sends a multipart form instead of a JSON body (the two speech-to-text
+/// endpoints in this crate): adds each field of `provider_options`, if it's a
+/// JSON object, to `form` as an extra text field. A string value is added
+/// as-is; anything else is compacted to a JSON string, since a multipart
+/// field is always text. A `provider_options` that isn't a JSON object is a
+/// no-op, same as [`merge_provider_options`].
+pub fn merge_provider_options_into_form(
+    mut form: reqwest::multipart::Form,
+    provider_options: &serde_json::Value,
+) -> reqwest::multipart::Form {
+    if let Some(overrides) = provider_options.as_object() {
+        for (key, value) in overrides {
+            let value = value
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| value.to_string());
+            form = form.text(key.clone(), value);
+        }
+    }
+    form
+}
+
 /// Turns a provider's non-2xx HTTP response into the right [`Error`] variant.
 ///
 /// Each provider constructs one of these (naming itself via `provider`) and
@@ -127,4 +175,45 @@ fn parse_rate_limits(headers: &HeaderMap) -> Vec<RateLimit> {
 
 fn header_u64(headers: &HeaderMap, name: &str) -> Option<u64> {
     headers.get(name)?.to_str().ok()?.parse::<u64>().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Serialize;
+    use serde_json::json;
+
+    #[derive(Serialize)]
+    struct Example {
+        model: String,
+        temperature: Option<f32>,
+    }
+
+    #[test]
+    fn merge_provider_options_overrides_and_adds_fields() {
+        let wire_request = Example {
+            model: "gpt-4o-mini".to_string(),
+            temperature: Some(0.2),
+        };
+        let provider_options = json!({"temperature": 0.9, "seed": 42});
+
+        let body = merge_provider_options(&wire_request, &provider_options).unwrap();
+
+        assert_eq!(body["model"], "gpt-4o-mini");
+        assert_eq!(body["temperature"], 0.9);
+        assert_eq!(body["seed"], 42);
+    }
+
+    #[test]
+    fn merge_provider_options_is_a_no_op_for_the_default_null_value() {
+        let wire_request = Example {
+            model: "gpt-4o-mini".to_string(),
+            temperature: Some(0.2),
+        };
+        let expected = serde_json::to_value(&wire_request).unwrap();
+
+        let body = merge_provider_options(&wire_request, &serde_json::Value::Null).unwrap();
+
+        assert_eq!(body, expected);
+    }
 }

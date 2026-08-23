@@ -76,8 +76,12 @@ pub struct TextRequest {
     /// How much freedom the model has to decide whether to call a tool. See
     /// [`ToolChoice`].
     pub tool_choice: ToolChoice,
-    /// Escape hatch for provider-specific options this crate doesn't model
-    /// directly yet. Interpretation is entirely up to the provider.
+    /// Extra provider-specific fields to send alongside this request, for
+    /// options this crate doesn't model as a typed field yet. Must be a JSON
+    /// object to have any effect: each of its top-level keys is merged into
+    /// (and, if it collides with one of this crate's own fields, overrides)
+    /// the request body actually sent to the provider. The default,
+    /// `Value::Null`, sends nothing extra.
     pub provider_options: serde_json::Value,
 }
 

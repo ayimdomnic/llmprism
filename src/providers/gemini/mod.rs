@@ -21,7 +21,7 @@ use eventsource_stream::Eventsource;
 use futures::stream::{BoxStream, StreamExt};
 use reqwest_middleware::ClientWithMiddleware;
 
-use crate::client::{build_http_client, ErrorMapper};
+use crate::client::{build_http_client, merge_provider_options, ErrorMapper};
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
@@ -81,12 +81,13 @@ impl Provider for GeminiProvider {
     async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
         let model = request.model.clone();
         let wire_request = maps::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/models/{model}:generateContent", self.base_url))
             .header("x-goog-api-key", &self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -116,6 +117,7 @@ impl Provider for GeminiProvider {
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
         let model = request.model.clone();
         let wire_request = maps::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
@@ -124,7 +126,7 @@ impl Provider for GeminiProvider {
                 self.base_url
             ))
             .header("x-goog-api-key", &self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -232,12 +234,13 @@ impl Provider for GeminiProvider {
     async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
         let model = request.model.clone();
         let wire_request = maps::build_structured_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/models/{model}:generateContent", self.base_url))
             .header("x-goog-api-key", &self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 

@@ -15,7 +15,9 @@ use reqwest_middleware::ClientWithMiddleware;
 use crate::audio::{
     AudioResponse, SpeechToTextRequest, TextToSpeechRequest, TranscriptionResponse,
 };
-use crate::client::{build_http_client, ErrorMapper};
+use crate::client::{
+    build_http_client, merge_provider_options, merge_provider_options_into_form, ErrorMapper,
+};
 use crate::error::Error;
 use crate::provider::Provider;
 
@@ -71,12 +73,13 @@ impl Provider for ElevenLabsProvider {
     async fn text_to_speech(&self, request: TextToSpeechRequest) -> Result<AudioResponse, Error> {
         let path = audio::speech_endpoint_path(&request);
         let wire_request = audio::build_speech_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/{path}", self.base_url))
             .header("xi-api-key", &self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -110,6 +113,7 @@ impl Provider for ElevenLabsProvider {
         let form = reqwest::multipart::Form::new()
             .text("model_id", request.model.clone())
             .part("file", part);
+        let form = merge_provider_options_into_form(form, &request.provider_options);
 
         let http_response = self
             .client

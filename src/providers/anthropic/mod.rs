@@ -14,7 +14,7 @@ use futures::stream::{BoxStream, StreamExt};
 use reqwest_middleware::ClientWithMiddleware;
 use serde_json::Value;
 
-use crate::client::{build_http_client, ErrorMapper};
+use crate::client::{build_http_client, merge_provider_options, ErrorMapper};
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
@@ -70,13 +70,14 @@ impl Provider for AnthropicProvider {
 
     async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
         let wire_request = maps::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", &self.version)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -106,13 +107,14 @@ impl Provider for AnthropicProvider {
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
         let mut wire_request = maps::build_request(&request);
         wire_request.stream = Some(true);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", &self.version)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -242,13 +244,14 @@ impl Provider for AnthropicProvider {
 
     async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
         let wire_request = maps::build_structured_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", &self.version)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 

@@ -26,7 +26,9 @@ use serde_json::{json, Value};
 use crate::audio::{
     AudioResponse, SpeechToTextRequest, TextToSpeechRequest, TranscriptionResponse,
 };
-use crate::client::{build_http_client, ErrorMapper};
+use crate::client::{
+    build_http_client, merge_provider_options, merge_provider_options_into_form, ErrorMapper,
+};
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::images::{ImagesRequest, ImagesResponse};
@@ -106,12 +108,13 @@ impl Provider for OpenAiProvider {
 
     async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
         let wire_request = maps::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -145,12 +148,13 @@ impl Provider for OpenAiProvider {
         // for one extra chunk at the end (empty `choices`, `usage` set) carrying
         // it, so streaming and non-streaming responses report usage the same way.
         wire_request.stream_options = Some(json!({"include_usage": true}));
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -267,12 +271,13 @@ impl Provider for OpenAiProvider {
 
     async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
         let wire_request = maps::build_structured_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -298,12 +303,13 @@ impl Provider for OpenAiProvider {
 
     async fn moderation(&self, request: ModerationRequest) -> Result<ModerationResponse, Error> {
         let wire_request = moderation::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/moderations", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -329,12 +335,13 @@ impl Provider for OpenAiProvider {
 
     async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingsResponse, Error> {
         let wire_request = embeddings::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/embeddings", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -360,12 +367,13 @@ impl Provider for OpenAiProvider {
 
     async fn images(&self, request: ImagesRequest) -> Result<ImagesResponse, Error> {
         let wire_request = images::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/images/generations", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -391,12 +399,13 @@ impl Provider for OpenAiProvider {
 
     async fn text_to_speech(&self, request: TextToSpeechRequest) -> Result<AudioResponse, Error> {
         let wire_request = audio::build_speech_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
             .client
             .post(format!("{}/audio/speech", self.base_url))
             .bearer_auth(&self.api_key)
-            .json(&wire_request)
+            .json(&body)
             .send()
             .await?;
 
@@ -430,6 +439,7 @@ impl Provider for OpenAiProvider {
         let form = reqwest::multipart::Form::new()
             .text("model", request.model.clone())
             .part("file", part);
+        let form = merge_provider_options_into_form(form, &request.provider_options);
 
         let http_response = self
             .client

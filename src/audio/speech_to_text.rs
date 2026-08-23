@@ -41,9 +41,13 @@ impl AudioInput {
 pub struct SpeechToTextRequest {
     pub model: String,
     pub audio: AudioInput,
-    /// Escape hatch for provider-specific options this crate doesn't model
-    /// directly yet (a language hint, a prompt to bias transcription, and so
-    /// on). Interpretation is entirely up to the provider.
+    /// Extra provider-specific fields to send alongside this request (a
+    /// language hint, a prompt to bias transcription, and so on). Must be a
+    /// JSON object to have any effect: since this request is sent as a
+    /// multipart form rather than JSON, each of its top-level keys becomes
+    /// an extra form field instead (a string value is sent as-is; anything
+    /// else is compacted to a JSON string, since a form field is always
+    /// text). The default, `Value::Null`, sends nothing extra.
     pub provider_options: serde_json::Value,
 }
 
