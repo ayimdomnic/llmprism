@@ -1,0 +1,66 @@
+name: CI
+
+# Runs on every push/PR. Nothing here calls a real provider API -- the live
+# smoke tests in tests/openai_text.rs and tests/anthropic_text.rs detect the
+# missing API key env vars and skip themselves, so this workflow needs no
+# secrets to stay green.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy (all features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-features --all-targets -- -D warnings
+
+  test:
+    name: Test (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # "default" catches the core crate on its own -- no HTTP client, no
+        # provider code -- so a change that accidentally requires a feature
+        # flag to compile gets caught here.
+        features: ["default", "full"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo test (default features)
+        if: matrix.features == 'default'
+        run: cargo test
+      - name: cargo test (all features)
+        if: matrix.features == 'full'
+        run: cargo test --features full
+
+  docs:
+    name: Docs build cleanly
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --all-features --no-deps
