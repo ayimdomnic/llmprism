@@ -60,9 +60,16 @@ echo "==> Bumping Cargo.toml to ${VERSION}"
 sed -i.bak "0,/^version = \".*\"/s//version = \"${VERSION}\"/" Cargo.toml
 rm -f Cargo.toml.bak
 
-echo "==> Committing the version bump"
 git add Cargo.toml CHANGELOG.md
-git commit -m "chore(release): ${TAG}"
+if git diff --cached --quiet; then
+    # Cargo.toml already had this version (e.g. cutting the very first
+    # release, where nothing needs bumping) -- nothing to commit, just tag
+    # the current HEAD as-is.
+    echo "==> Cargo.toml is already at ${VERSION}; nothing to commit"
+else
+    echo "==> Committing the version bump"
+    git commit -m "chore(release): ${TAG}"
+fi
 
 echo "==> Tagging ${TAG}"
 git tag -a "${TAG}" -m "${TAG}"
