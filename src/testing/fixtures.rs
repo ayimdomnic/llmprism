@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
+use crate::audio::{AudioOutput, AudioResponse, TranscriptionResponse};
 use crate::embeddings::{Embedding, EmbeddingsResponse};
 use crate::images::{GeneratedImage, ImagesResponse};
 use crate::moderation::{ModerationResponse, ModerationResult};
@@ -323,6 +324,88 @@ impl Default for FakeImagesResponse {
 
 impl From<FakeImagesResponse> for ImagesResponse {
     fn from(fixture: FakeImagesResponse) -> Self {
+        fixture.build()
+    }
+}
+
+/// A canned [`AudioResponse`], for scripting what a
+/// [`FakeProvider`](super::FakeProvider) should return from a
+/// text-to-speech request in a test.
+///
+/// # Example
+///
+/// ```
+/// use llmprism::testing::FakeAudioResponse;
+///
+/// let response = FakeAudioResponse::new(vec![0, 1, 2, 3], "audio/mpeg").build();
+/// assert_eq!(response.audio.mime_type, "audio/mpeg");
+/// ```
+pub struct FakeAudioResponse {
+    response: AudioResponse,
+}
+
+impl FakeAudioResponse {
+    /// Starts a canned response that will hand back `data`/`mime_type`
+    /// as-is.
+    pub fn new(data: Vec<u8>, mime_type: impl Into<String>) -> Self {
+        Self {
+            response: AudioResponse {
+                audio: AudioOutput {
+                    data,
+                    mime_type: mime_type.into(),
+                },
+                meta: Meta::default(),
+            },
+        }
+    }
+
+    /// Finishes building and returns the underlying [`AudioResponse`].
+    pub fn build(self) -> AudioResponse {
+        self.response
+    }
+}
+
+impl From<FakeAudioResponse> for AudioResponse {
+    fn from(fixture: FakeAudioResponse) -> Self {
+        fixture.build()
+    }
+}
+
+/// A canned [`TranscriptionResponse`], for scripting what a
+/// [`FakeProvider`](super::FakeProvider) should return from a
+/// speech-to-text request in a test.
+///
+/// # Example
+///
+/// ```
+/// use llmprism::testing::FakeTranscriptionResponse;
+///
+/// let response = FakeTranscriptionResponse::new("hello there").build();
+/// assert_eq!(response.text, "hello there");
+/// ```
+pub struct FakeTranscriptionResponse {
+    response: TranscriptionResponse,
+}
+
+impl FakeTranscriptionResponse {
+    /// Starts a canned response that will hand back `text` as-is.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            response: TranscriptionResponse {
+                text: text.into(),
+                meta: Meta::default(),
+            },
+        }
+    }
+
+    /// Finishes building and returns the underlying [`TranscriptionResponse`].
+    pub fn build(self) -> TranscriptionResponse {
+        self.response
+    }
+}
+
+impl From<FakeTranscriptionResponse> for TranscriptionResponse {
+    fn from(fixture: FakeTranscriptionResponse) -> Self {
         fixture.build()
     }
 }

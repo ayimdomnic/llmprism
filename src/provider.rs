@@ -3,6 +3,9 @@
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 
+use crate::audio::{
+    AudioResponse, SpeechToTextRequest, TextToSpeechRequest, TranscriptionResponse,
+};
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::images::{ImagesRequest, ImagesResponse};
@@ -130,5 +133,20 @@ pub trait Provider: Send + Sync {
     async fn images(&self, request: ImagesRequest) -> Result<ImagesResponse, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "images"))
+    }
+
+    /// Turns text into spoken audio.
+    async fn text_to_speech(&self, request: TextToSpeechRequest) -> Result<AudioResponse, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "text_to_speech"))
+    }
+
+    /// Transcribes spoken audio into text.
+    async fn speech_to_text(
+        &self,
+        request: SpeechToTextRequest,
+    ) -> Result<TranscriptionResponse, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "speech_to_text"))
     }
 }

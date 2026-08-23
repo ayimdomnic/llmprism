@@ -3,6 +3,9 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use futures::stream::{self, BoxStream, StreamExt};
 
+use crate::audio::{
+    AudioResponse, SpeechToTextRequest, TextToSpeechRequest, TranscriptionResponse,
+};
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::images::{ImagesRequest, ImagesResponse};
@@ -66,6 +69,8 @@ pub struct FakeProvider {
     moderation: ResponseQueue<ModerationRequest, ModerationResponse>,
     embeddings: ResponseQueue<EmbeddingsRequest, EmbeddingsResponse>,
     images: ResponseQueue<ImagesRequest, ImagesResponse>,
+    text_to_speech: ResponseQueue<TextToSpeechRequest, AudioResponse>,
+    speech_to_text: ResponseQueue<SpeechToTextRequest, TranscriptionResponse>,
     stream_chunk_words: usize,
 }
 
@@ -80,6 +85,8 @@ impl FakeProvider {
             moderation: ResponseQueue::new(),
             embeddings: ResponseQueue::new(),
             images: ResponseQueue::new(),
+            text_to_speech: ResponseQueue::new(),
+            speech_to_text: ResponseQueue::new(),
             stream_chunk_words: DEFAULT_STREAM_CHUNK_WORDS,
         }
     }
@@ -124,6 +131,20 @@ impl FakeProvider {
         self
     }
 
+    /// Queues one canned text-to-speech response, to be returned the next
+    /// time this provider receives a text-to-speech request.
+    pub fn respond_with_audio(self, response: impl Into<AudioResponse>) -> Self {
+        self.text_to_speech.push(response.into());
+        self
+    }
+
+    /// Queues one canned speech-to-text response, to be returned the next
+    /// time this provider receives a speech-to-text request.
+    pub fn respond_with_transcription(self, response: impl Into<TranscriptionResponse>) -> Self {
+        self.speech_to_text.push(response.into());
+        self
+    }
+
     /// Controls how many words [`stream_text_once`](Provider::stream_text_once)
     /// groups into each [`StreamEvent::TextDelta`] it synthesizes from a canned
     /// response's text. Defaults to one word per delta; raise it if a test wants
@@ -163,6 +184,18 @@ impl FakeProvider {
     /// order.
     pub fn recorded_images_requests(&self) -> Vec<ImagesRequest> {
         self.images.recorded()
+    }
+
+    /// Returns every text-to-speech request this provider actually received,
+    /// in order.
+    pub fn recorded_text_to_speech_requests(&self) -> Vec<TextToSpeechRequest> {
+        self.text_to_speech.recorded()
+    }
+
+    /// Returns every speech-to-text request this provider actually received,
+    /// in order.
+    pub fn recorded_speech_to_text_requests(&self) -> Vec<SpeechToTextRequest> {
+        self.speech_to_text.recorded()
     }
 }
 
@@ -224,6 +257,24 @@ impl Provider for FakeProvider {
         Ok(self
             .images
             .next(request, &self.name, "images", "respond_with_images"))
+    }
+
+    async fn text_to_speech(&self, request: TextToSpeechRequest) -> Result<AudioResponse, Error> {
+        Ok(self
+            .text_to_speech
+            .next(request, &self.name, "text_to_speech", "respond_with_audio"))
+    }
+
+    async fn speech_to_text(
+        &self,
+        request: SpeechToTextRequest,
+    ) -> Result<TranscriptionResponse, Error> {
+        Ok(self.speech_to_text.next(
+            request,
+            &self.name,
+            "speech_to_text",
+            "respond_with_transcription",
+        ))
     }
 }
 

@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::audio::{AudioInput, PendingSpeechToTextRequest, PendingTextToSpeechRequest};
 use crate::embeddings::PendingEmbeddingsRequest;
 use crate::error::Error;
 use crate::images::PendingImagesRequest;
@@ -254,6 +255,78 @@ impl Registry {
     ) -> Result<PendingImagesRequest, Error> {
         let provider = self.provider(provider_name)?;
         Ok(PendingImagesRequest::new(provider, model, prompt))
+    }
+
+    /// Starts a text-to-speech request against the provider registered under
+    /// `provider_name`, targeting `model`, speaking `input`. Optionally
+    /// chain `.with_voice(...)` on the returned builder, then call
+    /// `.generate()` to run it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnknownProvider`] if `provider_name` isn't
+    /// registered.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "openai")]
+    /// # async fn example() -> Result<(), llmprism::Error> {
+    /// use llmprism::Registry;
+    ///
+    /// let registry = Registry::from_env();
+    /// let response = registry
+    ///     .text_to_speech("openai", "tts-1", "Hello, world!")?
+    ///     .generate()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn text_to_speech(
+        &self,
+        provider_name: &str,
+        model: impl Into<String>,
+        input: impl Into<String>,
+    ) -> Result<PendingTextToSpeechRequest, Error> {
+        let provider = self.provider(provider_name)?;
+        Ok(PendingTextToSpeechRequest::new(provider, model, input))
+    }
+
+    /// Starts a speech-to-text request against the provider registered under
+    /// `provider_name`, targeting `model`, transcribing `audio`. Call
+    /// `.generate()` on the returned builder to run it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnknownProvider`] if `provider_name` isn't
+    /// registered.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "openai")]
+    /// # async fn example() -> Result<(), llmprism::Error> {
+    /// use llmprism::audio::AudioInput;
+    /// use llmprism::Registry;
+    ///
+    /// let audio = AudioInput::new(std::fs::read("recording.mp3")?, "audio/mpeg");
+    ///
+    /// let registry = Registry::from_env();
+    /// let response = registry
+    ///     .speech_to_text("openai", "whisper-1", audio)?
+    ///     .generate()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn speech_to_text(
+        &self,
+        provider_name: &str,
+        model: impl Into<String>,
+        audio: AudioInput,
+    ) -> Result<PendingSpeechToTextRequest, Error> {
+        let provider = self.provider(provider_name)?;
+        Ok(PendingSpeechToTextRequest::new(provider, model, audio))
     }
 
     /// Builds a registry from the first-party providers that have their API key

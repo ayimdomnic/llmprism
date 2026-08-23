@@ -98,11 +98,11 @@
 //!   do it for you -- and it's the one place your application code asks for a
 //!   provider by name. In tests, you register a [`testing::FakeProvider`] under
 //!   that same name instead, so no other code has to know it's being tested.
-//! - Every capability (today: [`text`] generation, streaming or not,
-//!   [`structured`] output, [`moderation`], [`embeddings`], and
-//!   [`images`]; audio is on the roadmap) follows the same shape: ask the
-//!   registry for a fluent request builder, chain `.with_*()` calls to
-//!   describe what you want, then call an async method like
+//! - Every capability -- [`text`] generation (streaming or not),
+//!   [`structured`] output, [`moderation`], [`embeddings`], [`images`], and
+//!   [`audio`] (text-to-speech and speech-to-text) -- follows the same shape:
+//!   ask the registry for a fluent request builder, chain `.with_*()` calls
+//!   to describe what you want, then call an async method like
 //!   [`text::PendingTextRequest::generate`] (or
 //!   [`text::PendingTextRequest::stream`] for incremental output) to run it.
 //!   Not every provider implements every capability -- Anthropic, for
@@ -128,6 +128,7 @@
 //! forced to compile in HTTP client code for the rest. Enable `full` to turn on
 //! every provider at once.
 
+pub mod audio;
 pub mod embeddings;
 pub mod error;
 pub mod images;
