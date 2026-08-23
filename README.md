@@ -33,11 +33,12 @@ thing -- tool calling works exactly the same way either way.
 
 This crate is early and under active development. Text generation -- including
 multi-step tool calling, streaming or not -- and structured output both work end
-to end for **OpenAI** and **Anthropic**. Moderation works for **OpenAI**
-(Anthropic has no moderation endpoint). Embeddings, images, audio, and the
-remaining ten providers from the original Prism library are on the roadmap but
-not implemented yet -- see the module-level docs (`cargo doc --open`) for what
-exists today. The public API may still change as more capabilities land.
+to end for **OpenAI** and **Anthropic**. Moderation and embeddings work for
+**OpenAI** (Anthropic has no equivalent endpoints for either). Images, audio,
+and the remaining ten providers from the original Prism library are on the
+roadmap but not implemented yet -- see the module-level docs (`cargo doc
+--open`) for what exists today. The public API may still change as more
+capabilities land.
 
 ## Installing
 
