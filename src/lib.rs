@@ -7,6 +7,7 @@ pub mod provider;
 pub mod registry;
 pub mod schema;
 pub mod stream_event;
+pub mod testing;
 pub mod text;
 pub mod tool;
 pub mod tool_loop;
