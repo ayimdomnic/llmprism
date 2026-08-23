@@ -22,5 +22,8 @@ pub mod anthropic;
 ))]
 pub mod openai_compatible;
 
+#[cfg(feature = "ollama")]
+pub mod ollama;
+
 #[cfg(feature = "voyageai")]
 pub mod voyageai;

@@ -334,10 +334,13 @@ impl Registry {
     /// `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `XAI_API_KEY`,
     /// `OPENROUTER_API_KEY`, `PERPLEXITY_API_KEY`, `ZAI_API_KEY`,
     /// `VOYAGEAI_API_KEY` -- and whose Cargo feature is enabled. A provider
-    /// whose key isn't set is simply
-    /// left out, rather than causing an error; if you then try to use it,
-    /// you'll get [`Error::UnknownProvider`] at the point of use, which is
-    /// usually clearer than failing at startup.
+    /// whose key isn't set is simply left out, rather than causing an error;
+    /// if you then try to use it, you'll get [`Error::UnknownProvider`] at
+    /// the point of use, which is usually clearer than failing at startup.
+    /// **Ollama is the one exception**: since it's typically a local server
+    /// with no API key at all, it's always registered when the `ollama`
+    /// feature is enabled (optionally pointed elsewhere with
+    /// `OLLAMA_BASE_URL`), not gated on an env var being set.
     ///
     /// This is the fastest way to get started; reach for [`Registry::new`] plus
     /// manual [`register`](Self::register) calls when you want more control (a
@@ -425,6 +428,20 @@ impl Registry {
                 "voyageai",
                 crate::providers::voyageai::VoyageAiProvider::new(api_key),
             );
+        }
+
+        // Unlike every provider above, Ollama needs no API key at all (it's
+        // typically a local server), so it's always registered when the
+        // feature is enabled rather than gated on an env var being set --
+        // `OLLAMA_BASE_URL` only overrides *where* it points, not *whether*
+        // it gets registered.
+        #[cfg(feature = "ollama")]
+        {
+            let provider = match std::env::var("OLLAMA_BASE_URL") {
+                Ok(base_url) => crate::providers::ollama::OllamaProvider::with_base_url(base_url),
+                Err(_) => crate::providers::ollama::OllamaProvider::new(),
+            };
+            registry.register("ollama", provider);
         }
 
         registry
