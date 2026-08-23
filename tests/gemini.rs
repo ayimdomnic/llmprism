@@ -114,3 +114,31 @@ async fn live_structured_generation_round_trip() {
     );
     assert_eq!(response.data["length"].as_u64(), Some(4));
 }
+
+#[tokio::test]
+async fn live_embeddings_round_trip() {
+    let Ok(api_key) = std::env::var("GEMINI_API_KEY") else {
+        eprintln!("skipping live_embeddings_round_trip: GEMINI_API_KEY not set");
+        return;
+    };
+
+    let mut registry = Registry::new();
+    registry.register("gemini", GeminiProvider::new(api_key));
+
+    let response = registry
+        .embeddings("gemini", "text-embedding-004")
+        .unwrap()
+        .with_input("The quick brown fox.")
+        .with_input("jumps over the lazy dog.")
+        .generate()
+        .await
+        .unwrap();
+
+    assert_eq!(response.embeddings.len(), 2);
+    assert!(!response.embeddings[0].vector.is_empty());
+    assert!(!response.embeddings[1].vector.is_empty());
+    assert_eq!(
+        response.embeddings[0].vector.len(),
+        response.embeddings[1].vector.len()
+    );
+}

@@ -1,7 +1,8 @@
 //! The Gemini provider, talking to Google's Generative Language API
 //! (`generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`,
-//! and `:streamGenerateContent?alt=sse` for streaming). Enable with the
-//! `gemini` Cargo feature.
+//! `:streamGenerateContent?alt=sse` for streaming, and
+//! `:batchEmbedContents` for embeddings). Enable with the `gemini` Cargo
+//! feature.
 //!
 //! Authenticates via the `x-goog-api-key` header rather than the `?key=`
 //! query parameter Gemini's own docs usually show first -- both work, but a
@@ -12,6 +13,7 @@
 //! resulting [`Error`].
 
 mod config;
+mod embeddings;
 mod maps;
 mod wire;
 
@@ -22,6 +24,7 @@ use futures::stream::{BoxStream, StreamExt};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::client::{build_http_client, merge_provider_options, ErrorMapper};
+use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
@@ -276,5 +279,41 @@ impl Provider for GeminiProvider {
             })?;
 
         maps::parse_structured_response(wire_response, self.name())
+    }
+
+    async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingsResponse, Error> {
+        let model = request.model.clone();
+        let wire_request = embeddings::build_request(&request, &model);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
+
+        let http_response = self
+            .client
+            .post(format!(
+                "{}/models/{model}:batchEmbedContents",
+                self.base_url
+            ))
+            .header("x-goog-api-key", &self.api_key)
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        let headers = http_response.headers().clone();
+        let body_text = http_response.text().await?;
+
+        if !status.is_success() {
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let wire_response: embeddings::BatchEmbedContentsResponse =
+            serde_json::from_str(&body_text).map_err(|e| Error::Decode {
+                provider: self.name().to_string(),
+                message: e.to_string(),
+            })?;
+
+        Ok(embeddings::parse_response(wire_response, &model))
     }
 }

@@ -41,7 +41,7 @@ it -- so here's what works where:
 | -------------------------------------------------------------| :-----------------------: | :----------------: | :--------: | :--------: | :----: | :---: |
 | **OpenAI**                                                   | ✅                         | ✅                  | ✅          | ✅          | ✅      | ✅     |
 | **Anthropic**                                                | ✅                         | ✅                  |            |            |        |       |
-| **Gemini**                                                   | ✅                         | ✅                  |            |            |        |       |
+| **Gemini**                                                   | ✅                         | ✅                  |            | ✅          |        |       |
 | **Groq**, **DeepSeek**, **Mistral**, **xAI**, **OpenRouter**, **Perplexity**, **Z.ai** | ✅ |     |            |            |        |       |
 | **Ollama**                                                   | ✅                         |                     |            | ✅          |        |       |
 | **VoyageAI**                                                 |                            |                     |            | ✅          |        |       |
@@ -49,9 +49,10 @@ it -- so here's what works where:
 
 A few notes on the gaps:
 
-- Anthropic and Gemini simply have no moderation, embeddings, or image
-  endpoints to call -- calling one of those methods on them returns
-  `Error::Unsupported` rather than failing to compile.
+- Anthropic has no moderation, embeddings, or image endpoints to call at
+  all; Gemini has no moderation or image endpoints. Calling one of those
+  methods on a provider that doesn't have it returns `Error::Unsupported`
+  rather than failing to compile.
 - Groq, DeepSeek, Mistral, xAI, OpenRouter, Perplexity, and Z.ai are thin
   wrappers around the OpenAI provider pointed at each vendor's own
   OpenAI-compatible endpoint. Text generation (including tools and streaming)
