@@ -3,7 +3,15 @@
 //! modules are being added incrementally as each capability lands.
 
 pub mod error;
+pub mod provider;
+pub mod registry;
 pub mod schema;
+pub mod text;
+pub mod tool;
+pub mod tool_loop;
 pub mod value_objects;
 
 pub use error::Error;
+pub use provider::Provider;
+pub use registry::Registry;
+pub use tool::Tool;
