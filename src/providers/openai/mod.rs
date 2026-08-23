@@ -56,6 +56,7 @@ use self::wire::{ChatResponse, ChatStreamChunk};
 /// likely don't need to construct this directly -- see
 /// [`Registry::from_env`](crate::Registry::from_env).
 pub struct OpenAiProvider {
+    name: &'static str,
     api_key: String,
     base_url: String,
     client: ClientWithMiddleware,
@@ -73,7 +74,23 @@ impl OpenAiProvider {
     /// `api.openai.com` itself. `base_url` should not include a trailing
     /// `/chat/completions`; that's appended automatically.
     pub fn with_base_url(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
+        Self::with_name_and_base_url("openai", api_key, base_url)
+    }
+
+    /// Like [`with_base_url`](Self::with_base_url), but also overrides what
+    /// [`Provider::name`] reports (and therefore what shows up in this
+    /// provider's error messages). Not exposed publicly: the
+    /// `providers::openai_compatible` family uses this internally so that,
+    /// say, a Groq request's errors say `"groq"` rather than the misleading
+    /// `"openai"` they'd otherwise inherit from reusing this provider's
+    /// implementation.
+    pub(crate) fn with_name_and_base_url(
+        name: &'static str,
+        api_key: impl Into<String>,
+        base_url: impl Into<String>,
+    ) -> Self {
         Self {
+            name,
             api_key: api_key.into(),
             base_url: base_url.into(),
             client: build_http_client(),
@@ -84,7 +101,7 @@ impl OpenAiProvider {
 #[async_trait]
 impl Provider for OpenAiProvider {
     fn name(&self) -> &str {
-        "openai"
+        self.name
     }
 
     async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
