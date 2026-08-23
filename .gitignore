@@ -1,0 +1,18 @@
+/target
+
+# This is a library, so we don't pin exact dependency versions in git --
+# consumers resolve their own. Remove this line if you'd rather commit it
+# for fully reproducible CI builds.
+/Cargo.lock
+
+# Editor/IDE cruft
+.vscode/
+.idea/
+*.swp
+
+# OS cruft
+.DS_Store
+
+# Local env files some providers may read API keys from during manual testing
+.env
+.env.local
