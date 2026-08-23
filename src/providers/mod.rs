@@ -21,3 +21,6 @@ pub mod anthropic;
     feature = "zai",
 ))]
 pub mod openai_compatible;
+
+#[cfg(feature = "voyageai")]
+pub mod voyageai;

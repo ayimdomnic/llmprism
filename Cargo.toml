@@ -43,6 +43,10 @@ openrouter = ["openai"]
 perplexity = ["openai"]
 zai = ["openai"]
 
+# Native providers -- each with its own wire format, so (unlike the
+# OpenAI-compatible family above) these only need "http", not "openai".
+voyageai = ["http"]
+
 full = [
     "openai",
     "anthropic",
@@ -53,4 +57,5 @@ full = [
     "openrouter",
     "perplexity",
     "zai",
+    "voyageai",
 ]
