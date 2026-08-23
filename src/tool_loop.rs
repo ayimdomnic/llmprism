@@ -85,7 +85,11 @@ pub async fn run_text(
 /// for independent, read-only lookups); every other tool call runs one at a time,
 /// in order. Either way, the results come back in the original request order, so
 /// callers never need to worry about which bucket a given call ended up in.
-async fn execute_tools(tools: &[Arc<dyn Tool>], calls: &[ToolCall]) -> Vec<ToolResult> {
+///
+/// Crate-visible (rather than private) because [`crate::stream_loop`] drives the
+/// same tool-execution behavior for streaming requests and reuses this directly,
+/// rather than duplicating it.
+pub(crate) async fn execute_tools(tools: &[Arc<dyn Tool>], calls: &[ToolCall]) -> Vec<ToolResult> {
     let mut concurrent_idx = Vec::new();
     let mut sequential_idx = Vec::new();
 

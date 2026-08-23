@@ -3,8 +3,11 @@
 
 use std::sync::Arc;
 
+use futures::stream::Stream;
+
 use crate::error::Error;
 use crate::provider::Provider;
+use crate::stream_event::StreamEvent;
 use crate::tool::Tool;
 use crate::value_objects::{Message, UserMessage};
 
@@ -248,5 +251,20 @@ impl PendingTextRequest {
     /// [`crate::tool_loop`] for the details.
     pub async fn generate(self) -> Result<TextResponse, Error> {
         crate::tool_loop::run_text(self.provider, self.request).await
+    }
+
+    /// Sends the request and returns a stream of [`StreamEvent`]s, instead of
+    /// waiting for the model's entire reply the way [`generate`](Self::generate)
+    /// does. Useful for showing a reply as it's generated rather than all at
+    /// once.
+    ///
+    /// Tool calling works the same way it does for `generate`: if the model asks
+    /// to call a tool, this handles running it, reports the result as a
+    /// [`StreamEvent::ToolResult`], and continues streaming the model's next
+    /// round trip automatically. The stream ends with exactly one
+    /// [`StreamEvent::StreamEnd`], carrying the same final result `generate`
+    /// would have returned.
+    pub fn stream(self) -> impl Stream<Item = Result<StreamEvent, Error>> {
+        crate::stream_loop::stream_text(self.provider, self.request)
     }
 }

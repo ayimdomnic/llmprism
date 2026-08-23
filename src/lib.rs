@@ -34,11 +34,12 @@
 //!   do it for you -- and it's the one place your application code asks for a
 //!   provider by name. In tests, you register a [`testing::FakeProvider`] under
 //!   that same name instead, so no other code has to know it's being tested.
-//! - Every capability (today, that's just [`text`] generation; streaming,
+//! - Every capability (today, that's [`text`] generation, streaming or not;
 //!   structured output, embeddings, images, audio, and moderation are on the
 //!   roadmap) follows the same shape: ask the registry for a fluent request
 //!   builder, chain `.with_*()` calls to describe what you want, then call an
-//!   async method like [`text::PendingTextRequest::generate`] to actually run it.
+//!   async method like [`text::PendingTextRequest::generate`] (or
+//!   [`text::PendingTextRequest::stream`] for incremental output) to run it.
 //! - [`Tool`] is how you give the model something it can call on your behalf --
 //!   a weather lookup, a database query, anything. Hand a list of tools to a text
 //!   request and `llmprism` handles the entire back-and-forth: if the model asks to
@@ -63,6 +64,7 @@ pub mod provider;
 pub mod registry;
 pub mod schema;
 pub mod stream_event;
+pub mod stream_loop;
 pub mod testing;
 pub mod text;
 pub mod tool;
