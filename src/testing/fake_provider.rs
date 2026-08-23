@@ -6,6 +6,7 @@ use futures::stream::{self, BoxStream, StreamExt};
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
+use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::{Step, TextRequest};
 
 const DEFAULT_STREAM_CHUNK_WORDS: usize = 1;
@@ -52,7 +53,9 @@ const DEFAULT_STREAM_CHUNK_WORDS: usize = 1;
 pub struct FakeProvider {
     name: String,
     responses: Mutex<Vec<Step>>,
+    structured_responses: Mutex<Vec<StructuredResponse>>,
     recorded: Mutex<Vec<TextRequest>>,
+    recorded_structured: Mutex<Vec<StructuredRequest>>,
     stream_chunk_words: usize,
 }
 
@@ -63,7 +66,9 @@ impl FakeProvider {
         Self {
             name: name.into(),
             responses: Mutex::new(Vec::new()),
+            structured_responses: Mutex::new(Vec::new()),
             recorded: Mutex::new(Vec::new()),
+            recorded_structured: Mutex::new(Vec::new()),
             stream_chunk_words: DEFAULT_STREAM_CHUNK_WORDS,
         }
     }
@@ -77,6 +82,19 @@ impl FakeProvider {
             .lock()
             .expect("fake provider mutex poisoned")
             .push(step.into());
+        self
+    }
+
+    /// Queues one canned structured-output response, to be returned the next
+    /// time this provider receives a structured request. Kept as a separate
+    /// queue from [`respond_with`](Self::respond_with) since a structured
+    /// response is a different shape ([`StructuredResponse`], not [`Step`]) --
+    /// a test that exercises both capabilities scripts each independently.
+    pub fn respond_with_structured(self, response: impl Into<StructuredResponse>) -> Self {
+        self.structured_responses
+            .lock()
+            .expect("fake provider mutex poisoned")
+            .push(response.into());
         self
     }
 
@@ -94,6 +112,16 @@ impl FakeProvider {
     /// messages, which tools, and so on).
     pub fn recorded_requests(&self) -> Vec<TextRequest> {
         self.recorded
+            .lock()
+            .expect("fake provider mutex poisoned")
+            .clone()
+    }
+
+    /// Returns every structured request this provider actually received, in
+    /// order -- the structured-output counterpart to
+    /// [`recorded_requests`](Self::recorded_requests).
+    pub fn recorded_structured_requests(&self) -> Vec<StructuredRequest> {
+        self.recorded_structured
             .lock()
             .expect("fake provider mutex poisoned")
             .clone()
@@ -153,6 +181,27 @@ impl Provider for FakeProvider {
         });
 
         Ok(stream::iter(events.into_iter().map(Ok)).boxed())
+    }
+
+    async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
+        self.recorded_structured
+            .lock()
+            .expect("fake provider mutex poisoned")
+            .push(request);
+
+        let mut responses = self
+            .structured_responses
+            .lock()
+            .expect("fake provider mutex poisoned");
+        if responses.is_empty() {
+            panic!(
+                "FakeProvider '{}' received a structured request but has no more canned \
+                 structured responses queued -- call .respond_with_structured(...) for every \
+                 expected call",
+                self.name
+            );
+        }
+        Ok(responses.remove(0))
     }
 }
 

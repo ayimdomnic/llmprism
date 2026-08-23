@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use crate::structured::StructuredResponse;
 use crate::text::Step;
 use crate::value_objects::{FinishReason, Meta, ToolCall, Usage};
 
@@ -75,6 +76,62 @@ impl FakeTextResponse {
 
 impl From<FakeTextResponse> for Step {
     fn from(fixture: FakeTextResponse) -> Self {
+        fixture.build()
+    }
+}
+
+/// A fluent builder for a canned [`StructuredResponse`], for scripting what a
+/// [`FakeProvider`](super::FakeProvider) should return from a structured
+/// -output request in a test.
+///
+/// # Example
+///
+/// ```
+/// use llmprism::testing::FakeStructuredResponse;
+/// use serde_json::json;
+///
+/// let response = FakeStructuredResponse::new(json!({"greeting": "hi"})).build();
+/// assert_eq!(response.data["greeting"], "hi");
+/// ```
+pub struct FakeStructuredResponse {
+    response: StructuredResponse,
+}
+
+impl FakeStructuredResponse {
+    /// Starts a canned response that will hand back `data` as-is, with a
+    /// `Stop` finish reason.
+    pub fn new(data: Value) -> Self {
+        Self {
+            response: StructuredResponse {
+                data,
+                finish_reason: FinishReason::Stop,
+                usage: Usage::default(),
+                meta: Meta::default(),
+            },
+        }
+    }
+
+    /// Overrides the token usage reported for this canned response.
+    pub fn with_usage(mut self, usage: Usage) -> Self {
+        self.response.usage = usage;
+        self
+    }
+
+    /// Overrides the finish reason, for testing how your application handles
+    /// a truncated (`FinishReason::Length`) or otherwise non-`Stop` result.
+    pub fn with_finish_reason(mut self, finish_reason: FinishReason) -> Self {
+        self.response.finish_reason = finish_reason;
+        self
+    }
+
+    /// Finishes building and returns the underlying [`StructuredResponse`].
+    pub fn build(self) -> StructuredResponse {
+        self.response
+    }
+}
+
+impl From<FakeStructuredResponse> for StructuredResponse {
+    fn from(fixture: FakeStructuredResponse) -> Self {
         fixture.build()
     }
 }
