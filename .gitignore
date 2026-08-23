@@ -16,3 +16,4 @@
 # Local env files some providers may read API keys from during manual testing
 .env
 .env.local
+.npmrc
