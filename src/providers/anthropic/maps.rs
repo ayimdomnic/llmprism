@@ -42,6 +42,7 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
             .map(|tool| to_wire_tool(tool.as_ref()))
             .collect(),
         tool_choice: to_wire_tool_choice(&request.tool_choice, request.tools.is_empty()),
+        stream: None,
     }
 }
 
@@ -148,28 +149,41 @@ pub fn parse_response(response: MessagesResponse) -> Step {
         }
     }
 
-    let finish_reason = match response.stop_reason.as_deref() {
-        Some("end_turn") | Some("stop_sequence") => FinishReason::Stop,
-        Some("max_tokens") => FinishReason::Length,
-        Some("tool_use") => FinishReason::ToolCalls,
-        _ => FinishReason::Other,
-    };
-
     Step {
         text: if text.is_empty() { None } else { Some(text) },
         tool_calls,
-        finish_reason,
-        usage: Usage {
-            prompt_tokens: response.usage.input_tokens,
-            completion_tokens: response.usage.output_tokens,
-            cache_write_tokens: response.usage.cache_creation_input_tokens,
-            cache_read_tokens: response.usage.cache_read_input_tokens,
-            thought_tokens: None,
-        },
+        finish_reason: map_finish_reason(response.stop_reason.as_deref()),
+        usage: map_usage(response.usage),
         meta: Meta {
             id: Some(response.id),
             model: Some(response.model),
             rate_limits: Vec::new(),
         },
+    }
+}
+
+/// Maps a Messages API `stop_reason` to this crate's [`FinishReason`]. Shared
+/// between the non-streaming response parser above and the streaming event
+/// parser in `mod.rs` (there, it's the `message_delta` event's `delta
+/// .stop_reason`) -- both encounter the identical set of strings.
+pub(crate) fn map_finish_reason(stop_reason: Option<&str>) -> FinishReason {
+    match stop_reason {
+        Some("end_turn") | Some("stop_sequence") => FinishReason::Stop,
+        Some("max_tokens") => FinishReason::Length,
+        Some("tool_use") => FinishReason::ToolCalls,
+        _ => FinishReason::Other,
+    }
+}
+
+/// Maps a Messages API `usage` object to this crate's [`Usage`]. Shared for the
+/// same reason as [`map_finish_reason`] -- streaming's `message_start` event
+/// carries this same shape.
+pub(crate) fn map_usage(usage: super::wire::MessagesUsage) -> Usage {
+    Usage {
+        prompt_tokens: usage.input_tokens,
+        completion_tokens: usage.output_tokens,
+        cache_write_tokens: usage.cache_creation_input_tokens,
+        cache_read_tokens: usage.cache_read_input_tokens,
+        thought_tokens: None,
     }
 }

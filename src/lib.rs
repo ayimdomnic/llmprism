@@ -28,6 +28,38 @@
 //! Swap `"openai"` for `"anthropic"` and nothing else about this code needs to
 //! change -- that consistency across providers is the reason this crate exists.
 //!
+//! # Streaming
+//!
+//! Call [`stream`](text::PendingTextRequest::stream) instead of `generate` to get
+//! the reply incrementally, as a stream of [`StreamEvent`]s, instead of waiting
+//! for the whole thing:
+//!
+//! ```no_run
+//! # #[cfg(feature = "openai")]
+//! # async fn example() -> Result<(), llmprism::Error> {
+//! use futures::StreamExt;
+//! use llmprism::{Registry, StreamEvent};
+//!
+//! let registry = Registry::from_env();
+//! let mut stream = registry
+//!     .text("openai", "gpt-4o-mini")?
+//!     .with_prompt("Count to three.")
+//!     .stream();
+//!
+//! while let Some(event) = stream.next().await {
+//!     if let StreamEvent::TextDelta { text } = event? {
+//!         print!("{text}");
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Tool calling works the same way here as it does for `generate` -- if the
+//! model asks to call a tool, `llmprism` runs it, reports the result as a
+//! [`StreamEvent::ToolResult`], and keeps streaming the model's next round trip
+//! automatically. See [`stream_loop`] for how that's implemented.
+//!
 //! # How the pieces fit together
 //!
 //! - [`Registry`] is where you register providers -- or let [`Registry::from_env`]

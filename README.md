@@ -25,13 +25,15 @@ async fn main() -> Result<(), llmprism::Error> {
 ```
 
 Swap `"openai"` for `"anthropic"` and the rest of the code doesn't change -- that's
-the whole point.
+the whole point. Call `.stream()` instead of `.generate()` to get the reply
+incrementally as a stream of `StreamEvent`s rather than waiting for the whole
+thing -- tool calling works exactly the same way either way.
 
 ## Status
 
-This crate is early and under active development. Text generation (including
-multi-step tool calling) works end to end for **OpenAI** and **Anthropic**.
-Streaming, structured output, embeddings, images, audio, moderation, and the
+This crate is early and under active development. Text generation -- including
+multi-step tool calling, streaming or not -- works end to end for **OpenAI** and
+**Anthropic**. Structured output, embeddings, images, audio, moderation, and the
 remaining ten providers from the original Prism library are on the roadmap but not
 implemented yet -- see the module-level docs (`cargo doc --open`) for what exists
 today. The public API may still change as more capabilities land.
@@ -55,8 +57,8 @@ for the providers you actually use. Turn on everything with the `full` feature.
   code has to change.
 - Every capability (right now, just **Text**) follows the same shape: call a method
   on the registry to get a fluent builder, chain `.with_*()` calls to describe the
-  request, then call `.generate()` (or the streaming equivalent, once that lands)
-  to actually run it.
+  request, then call `.generate()` (all at once) or `.stream()` (incrementally,
+  as a `Stream` of events) to actually run it.
 - **Tools** are anything implementing the `Tool` trait. Give a request a list of
   tools and `llmprism` handles the whole back-and-forth automatically: if the model
   asks to call a tool, the tool runs, its result is sent back to the model, and this

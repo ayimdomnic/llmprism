@@ -19,6 +19,8 @@ pub struct MessagesRequest {
     pub tools: Vec<MessagesTool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,10 +66,112 @@ pub struct MessagesResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct MessagesUsage {
+    #[serde(default)]
     pub input_tokens: u32,
+    #[serde(default)]
     pub output_tokens: u32,
     #[serde(default)]
     pub cache_creation_input_tokens: Option<u32>,
     #[serde(default)]
     pub cache_read_input_tokens: Option<u32>,
+}
+
+/// One `event:`/`data:` pair from a streamed (`"stream": true`) Messages API
+/// response. Unlike Chat Completions' uniform per-chunk shape, Anthropic's
+/// stream is a sequence of distinctly-shaped, named events -- `message_start`
+/// once, then `content_block_start`/`content_block_delta`/`content_block_stop`
+/// for each piece of content (interleaved by `index` if there's more than one),
+/// then `message_delta` and `message_stop`. This enum mirrors that directly via
+/// serde's internally-tagged representation on the JSON body's own `"type"`
+/// field (the SSE `event:` name carries the same information redundantly, so
+/// this crate parses `data:` and ignores `event:`).
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StreamEventPayload {
+    MessageStart {
+        message: StreamMessageStart,
+    },
+    ContentBlockStart {
+        index: usize,
+        content_block: StreamContentBlockStart,
+    },
+    ContentBlockDelta {
+        index: usize,
+        delta: StreamDelta,
+    },
+    ContentBlockStop {
+        index: usize,
+    },
+    MessageDelta {
+        delta: StreamMessageDelta,
+        #[serde(default)]
+        usage: Option<StreamMessageDeltaUsage>,
+    },
+    MessageStop,
+    Ping,
+    Error {
+        error: StreamErrorDetail,
+    },
+    /// Catches any event type this crate doesn't specifically handle yet (e.g.
+    /// extended-thinking or citation events), so an API addition doesn't turn
+    /// into a hard decode failure for every consumer.
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StreamMessageStart {
+    pub id: String,
+    pub model: String,
+    pub usage: MessagesUsage,
+}
+
+/// The content block a `content_block_start` event introduces. Only the two
+/// shapes this crate translates into a [`StreamEvent`](crate::StreamEvent) are
+/// named explicitly; anything else (thinking, citations, server-side tool
+/// results, ...) falls into `Other` and its deltas are then safely ignored.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StreamContentBlockStart {
+    Text {
+        #[serde(default)]
+        text: String,
+    },
+    ToolUse {
+        id: String,
+        name: String,
+    },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StreamDelta {
+    TextDelta {
+        text: String,
+    },
+    InputJsonDelta {
+        partial_json: String,
+    },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StreamMessageDelta {
+    pub stop_reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StreamMessageDeltaUsage {
+    #[serde(default)]
+    pub output_tokens: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StreamErrorDetail {
+    #[serde(rename = "type")]
+    pub kind: Option<String>,
+    pub message: String,
 }
