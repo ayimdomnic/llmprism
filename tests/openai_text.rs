@@ -5,6 +5,7 @@
 #![cfg(feature = "openai")]
 
 use futures::StreamExt;
+use llmprism::audio::AudioInput;
 use llmprism::providers::openai::OpenAiProvider;
 use llmprism::schema::{NumberSchema, ObjectSchema, Schema, StringSchema};
 use llmprism::stream_event::StreamEvent;
@@ -190,4 +191,47 @@ async fn live_images_round_trip() {
         .unwrap();
 
     assert_eq!(response.images.len(), 1);
+}
+
+#[tokio::test]
+async fn live_audio_round_trip() {
+    let Ok(api_key) = std::env::var("OPENAI_API_KEY") else {
+        eprintln!("skipping live_audio_round_trip: OPENAI_API_KEY not set");
+        return;
+    };
+
+    let mut registry = Registry::new();
+    registry.register("openai", OpenAiProvider::new(api_key));
+
+    // Speak a sentence, then transcribe the audio right back -- exercises
+    // both audio endpoints and confirms they're actually compatible with
+    // each other, not just individually well-formed.
+    let speech = registry
+        .text_to_speech(
+            "openai",
+            "tts-1",
+            "The quick brown fox jumps over the lazy dog.",
+        )
+        .unwrap()
+        .with_voice("alloy")
+        .generate()
+        .await
+        .unwrap();
+
+    assert!(!speech.audio.data.is_empty());
+
+    let audio =
+        AudioInput::new(speech.audio.data, speech.audio.mime_type).with_filename("speech.mp3");
+    let transcription = registry
+        .speech_to_text("openai", "whisper-1", audio)
+        .unwrap()
+        .generate()
+        .await
+        .unwrap();
+
+    assert!(
+        transcription.text.to_lowercase().contains("fox"),
+        "expected transcription to mention 'fox', got: {}",
+        transcription.text
+    );
 }

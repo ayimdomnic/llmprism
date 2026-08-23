@@ -54,7 +54,7 @@ pub struct AudioResponse {
 ///
 /// ```no_run
 /// # #[cfg(feature = "openai")]
-/// # async fn example() -> Result<(), llmprism::Error> {
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// use llmprism::Registry;
 ///
 /// let registry = Registry::from_env();

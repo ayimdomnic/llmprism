@@ -74,7 +74,7 @@ pub struct TranscriptionResponse {
 ///
 /// ```no_run
 /// # #[cfg(feature = "openai")]
-/// # async fn example() -> Result<(), llmprism::Error> {
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// use llmprism::audio::AudioInput;
 /// use llmprism::Registry;
 ///

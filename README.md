@@ -33,12 +33,12 @@ thing -- tool calling works exactly the same way either way.
 
 This crate is early and under active development. Text generation -- including
 multi-step tool calling, streaming or not -- and structured output both work end
-to end for **OpenAI** and **Anthropic**. Moderation, embeddings, and image
-generation work for **OpenAI** (Anthropic has no equivalent endpoints for any
-of them). Audio and the remaining ten providers from the original Prism
-library are on the roadmap but not implemented yet -- see the module-level
-docs (`cargo doc --open`) for what exists today. The public API may still
-change as more capabilities land.
+to end for **OpenAI** and **Anthropic**. Moderation, embeddings, image
+generation, and audio (text-to-speech and speech-to-text) all work for
+**OpenAI** (Anthropic has no equivalent endpoints for any of them). The
+remaining ten providers from the original Prism library are on the roadmap
+but not implemented yet -- see the module-level docs (`cargo doc --open`) for
+what exists today. The public API may still change as more providers land.
 
 ## Installing
 
@@ -57,12 +57,13 @@ for the providers you actually use. Turn on everything with the `full` feature.
   it for you) and it's the one place application code asks for a provider by name.
   In tests you register a `FakeProvider` under the same name instead -- no other
   code has to change.
-- Every capability (**Text**, **structured output**, and **moderation**, so
-  far) follows the same shape: call a method on the registry to get a fluent
-  builder, chain `.with_*()` calls to describe the request, then run it --
-  `.generate()` (all at once) or `.stream()` (incrementally, as a `Stream` of
-  events) for Text, `.generate()` for the others. Not every provider
-  implements every capability; calling one that doesn't returns
+- Every capability -- **Text**, **structured output**, **moderation**,
+  **embeddings**, **images**, and **audio** (text-to-speech and
+  speech-to-text) -- follows the same shape: call a method on the registry to
+  get a fluent builder, chain `.with_*()` calls to describe the request, then
+  run it -- `.generate()` (all at once) or `.stream()` (incrementally, as a
+  `Stream` of events) for Text, `.generate()` for the others. Not every
+  provider implements every capability; calling one that doesn't returns
   `Error::Unsupported` rather than failing to compile.
 - **Tools** are anything implementing the `Tool` trait. Give a request a list of
   tools and `llmprism` handles the whole back-and-forth automatically: if the model

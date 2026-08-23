@@ -1,10 +1,12 @@
 //! The OpenAI provider. Text generation and structured output talk to the
 //! Chat Completions API (`api.openai.com/v1/chat/completions`); moderation,
-//! embeddings, and image generation each talk to their own separate endpoint
-//! (`/v1/moderations`, `/v1/embeddings`, `/v1/images/generations` -- see
-//! `moderation.rs`/`embeddings.rs`/`images.rs`). Enable with the `openai`
-//! Cargo feature.
+//! embeddings, image generation, and both audio endpoints each talk to their
+//! own separate endpoint (`/v1/moderations`, `/v1/embeddings`,
+//! `/v1/images/generations`, `/v1/audio/speech`, `/v1/audio/transcriptions`
+//! -- see `moderation.rs`/`embeddings.rs`/`images.rs`/`audio.rs`). Enable
+//! with the `openai` Cargo feature.
 
+mod audio;
 mod config;
 mod embeddings;
 mod images;
@@ -21,6 +23,9 @@ use futures::stream::{BoxStream, StreamExt};
 use reqwest_middleware::ClientWithMiddleware;
 use serde_json::{json, Value};
 
+use crate::audio::{
+    AudioResponse, SpeechToTextRequest, TextToSpeechRequest, TranscriptionResponse,
+};
 use crate::client::{build_http_client, ErrorMapper};
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
@@ -365,6 +370,76 @@ impl Provider for OpenAiProvider {
             })?;
 
         images::parse_response(wire_response, self.name())
+    }
+
+    async fn text_to_speech(&self, request: TextToSpeechRequest) -> Result<AudioResponse, Error> {
+        let wire_request = audio::build_speech_request(&request);
+
+        let http_response = self
+            .client
+            .post(format!("{}/audio/speech", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&wire_request)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        if !status.is_success() {
+            let headers = http_response.headers().clone();
+            let body_text = http_response.text().await?;
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let mime_type = http_response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.to_string());
+        let data = http_response.bytes().await?;
+
+        Ok(audio::parse_speech_response(data.to_vec(), mime_type))
+    }
+
+    async fn speech_to_text(
+        &self,
+        request: SpeechToTextRequest,
+    ) -> Result<TranscriptionResponse, Error> {
+        let part = reqwest::multipart::Part::bytes(request.audio.data.clone())
+            .file_name(request.audio.filename.clone())
+            .mime_str(&request.audio.mime_type)?;
+        let form = reqwest::multipart::Form::new()
+            .text("model", request.model.clone())
+            .part("file", part);
+
+        let http_response = self
+            .client
+            .post(format!("{}/audio/transcriptions", self.base_url))
+            .bearer_auth(&self.api_key)
+            .multipart(form)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        let headers = http_response.headers().clone();
+        let body_text = http_response.text().await?;
+
+        if !status.is_success() {
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let wire_response: audio::TranscriptionApiResponse = serde_json::from_str(&body_text)
+            .map_err(|e| Error::Decode {
+                provider: self.name().to_string(),
+                message: e.to_string(),
+            })?;
+
+        Ok(audio::parse_transcription_response(wire_response))
     }
 }
 
