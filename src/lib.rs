@@ -99,8 +99,8 @@
 //!   provider by name. In tests, you register a [`testing::FakeProvider`] under
 //!   that same name instead, so no other code has to know it's being tested.
 //! - Every capability (today: [`text`] generation, streaming or not,
-//!   [`structured`] output, and [`moderation`]; embeddings, images, and audio
-//!   are on the roadmap) follows the same shape: ask the registry for a
+//!   [`structured`] output, [`moderation`], and [`embeddings`]; images and
+//!   audio are on the roadmap) follows the same shape: ask the registry for a
 //!   fluent request builder, chain `.with_*()` calls to describe what you
 //!   want, then call an async method like
 //!   [`text::PendingTextRequest::generate`] (or
@@ -128,6 +128,7 @@
 //! forced to compile in HTTP client code for the rest. Enable `full` to turn on
 //! every provider at once.
 
+pub mod embeddings;
 pub mod error;
 pub mod moderation;
 pub mod provider;

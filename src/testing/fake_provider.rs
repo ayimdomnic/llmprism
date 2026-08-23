@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use futures::stream::{self, BoxStream, StreamExt};
 
+use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
@@ -62,6 +63,7 @@ pub struct FakeProvider {
     text: ResponseQueue<TextRequest, Step>,
     structured: ResponseQueue<StructuredRequest, StructuredResponse>,
     moderation: ResponseQueue<ModerationRequest, ModerationResponse>,
+    embeddings: ResponseQueue<EmbeddingsRequest, EmbeddingsResponse>,
     stream_chunk_words: usize,
 }
 
@@ -74,6 +76,7 @@ impl FakeProvider {
             text: ResponseQueue::new(),
             structured: ResponseQueue::new(),
             moderation: ResponseQueue::new(),
+            embeddings: ResponseQueue::new(),
             stream_chunk_words: DEFAULT_STREAM_CHUNK_WORDS,
         }
     }
@@ -104,6 +107,13 @@ impl FakeProvider {
         self
     }
 
+    /// Queues one canned embeddings response, to be returned the next time
+    /// this provider receives an embeddings request.
+    pub fn respond_with_embeddings(self, response: impl Into<EmbeddingsResponse>) -> Self {
+        self.embeddings.push(response.into());
+        self
+    }
+
     /// Controls how many words [`stream_text_once`](Provider::stream_text_once)
     /// groups into each [`StreamEvent::TextDelta`] it synthesizes from a canned
     /// response's text. Defaults to one word per delta; raise it if a test wants
@@ -131,6 +141,12 @@ impl FakeProvider {
     /// order.
     pub fn recorded_moderation_requests(&self) -> Vec<ModerationRequest> {
         self.moderation.recorded()
+    }
+
+    /// Returns every embeddings request this provider actually received, in
+    /// order.
+    pub fn recorded_embeddings_requests(&self) -> Vec<EmbeddingsRequest> {
+        self.embeddings.recorded()
     }
 }
 
@@ -180,6 +196,12 @@ impl Provider for FakeProvider {
         Ok(self
             .moderation
             .next(request, &self.name, "moderation", "respond_with_moderation"))
+    }
+
+    async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingsResponse, Error> {
+        Ok(self
+            .embeddings
+            .next(request, &self.name, "embeddings", "respond_with_embeddings"))
     }
 }
 

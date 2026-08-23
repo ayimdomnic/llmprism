@@ -26,3 +26,13 @@ pub struct Usage {
     #[serde(default)]
     pub thought_tokens: Option<u32>,
 }
+
+/// Token accounting for an embeddings call -- kept separate from [`Usage`]
+/// rather than reusing it with the other fields left at zero, since embedding
+/// billing has no completion, cache, or thinking tokens at all; a type with
+/// only the field that applies is clearer than one with four that never do.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct EmbeddingsUsage {
+    /// Tokens consumed by the input text being embedded.
+    pub prompt_tokens: u32,
+}

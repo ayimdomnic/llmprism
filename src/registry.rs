@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::embeddings::PendingEmbeddingsRequest;
 use crate::error::Error;
 use crate::moderation::PendingModerationRequest;
 use crate::provider::Provider;
@@ -182,6 +183,41 @@ impl Registry {
     ) -> Result<PendingModerationRequest, Error> {
         let provider = self.provider(provider_name)?;
         Ok(PendingModerationRequest::new(provider, model))
+    }
+
+    /// Starts an embeddings request against the provider registered under
+    /// `provider_name`, targeting `model`. Add one or more
+    /// `.with_input(...)` calls on the returned builder, then call
+    /// `.generate()` to run it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnknownProvider`] if `provider_name` isn't
+    /// registered.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "openai")]
+    /// # async fn example() -> Result<(), llmprism::Error> {
+    /// use llmprism::Registry;
+    ///
+    /// let registry = Registry::from_env();
+    /// let response = registry
+    ///     .embeddings("openai", "text-embedding-3-small")?
+    ///     .with_input("The quick brown fox.")
+    ///     .generate()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn embeddings(
+        &self,
+        provider_name: &str,
+        model: impl Into<String>,
+    ) -> Result<PendingEmbeddingsRequest, Error> {
+        let provider = self.provider(provider_name)?;
+        Ok(PendingEmbeddingsRequest::new(provider, model))
     }
 
     /// Builds a registry from the first-party providers that have their API key

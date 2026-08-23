@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
+use crate::embeddings::{Embedding, EmbeddingsResponse};
 use crate::moderation::{ModerationResponse, ModerationResult};
 use crate::structured::StructuredResponse;
 use crate::text::Step;
-use crate::value_objects::{FinishReason, Meta, ToolCall, Usage};
+use crate::value_objects::{EmbeddingsUsage, FinishReason, Meta, ToolCall, Usage};
 
 /// A fluent builder for a canned [`Step`], for scripting what a
 /// [`FakeProvider`](super::FakeProvider) should return in a test.
@@ -199,6 +200,65 @@ impl Default for FakeModerationResponse {
 
 impl From<FakeModerationResponse> for ModerationResponse {
     fn from(fixture: FakeModerationResponse) -> Self {
+        fixture.build()
+    }
+}
+
+/// A fluent builder for a canned [`EmbeddingsResponse`], for scripting what a
+/// [`FakeProvider`](super::FakeProvider) should return from an embeddings
+/// request in a test.
+///
+/// # Example
+///
+/// ```
+/// use llmprism::testing::FakeEmbeddingsResponse;
+///
+/// let response = FakeEmbeddingsResponse::new().with_embedding(vec![0.1, 0.2, 0.3]).build();
+/// assert_eq!(response.embeddings[0].vector.len(), 3);
+/// ```
+pub struct FakeEmbeddingsResponse {
+    response: EmbeddingsResponse,
+}
+
+impl FakeEmbeddingsResponse {
+    /// Starts a canned response with no embeddings yet.
+    pub fn new() -> Self {
+        Self {
+            response: EmbeddingsResponse {
+                embeddings: Vec::new(),
+                usage: EmbeddingsUsage::default(),
+                meta: Meta::default(),
+            },
+        }
+    }
+
+    /// Appends one embedding vector, for the next input in order. Call this
+    /// once per input your test expects to be embedded.
+    pub fn with_embedding(mut self, vector: Vec<f32>) -> Self {
+        self.response.embeddings.push(Embedding { vector });
+        self
+    }
+
+    /// Overrides the token usage reported for this canned response.
+    pub fn with_usage(mut self, usage: EmbeddingsUsage) -> Self {
+        self.response.usage = usage;
+        self
+    }
+
+    /// Finishes building and returns the underlying [`EmbeddingsResponse`].
+    pub fn build(self) -> EmbeddingsResponse {
+        self.response
+    }
+}
+
+impl Default for FakeEmbeddingsResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<FakeEmbeddingsResponse> for EmbeddingsResponse {
+    fn from(fixture: FakeEmbeddingsResponse) -> Self {
         fixture.build()
     }
 }

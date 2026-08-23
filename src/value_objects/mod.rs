@@ -17,4 +17,4 @@ pub use message::{
 };
 pub use meta::{Meta, RateLimit};
 pub use tool_call::{ToolCall, ToolOutcome, ToolOutput, ToolResult};
-pub use usage::Usage;
+pub use usage::{EmbeddingsUsage, Usage};

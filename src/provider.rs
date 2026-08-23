@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 
+use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::stream_event::StreamEvent;
@@ -116,5 +117,11 @@ pub trait Provider: Send + Sync {
     async fn moderation(&self, request: ModerationRequest) -> Result<ModerationResponse, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "moderation"))
+    }
+
+    /// Turns one or more pieces of text into embedding vectors.
+    async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingsResponse, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "embeddings"))
     }
 }
