@@ -5,6 +5,7 @@ use futures::stream::BoxStream;
 
 use crate::error::Error;
 use crate::stream_event::StreamEvent;
+use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::{Step, TextRequest};
 
 /// A single LLM backend -- OpenAI, Anthropic, or any other service you connect
@@ -90,5 +91,20 @@ pub trait Provider: Send + Sync {
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "stream_text"))
+    }
+
+    /// Performs a structured-output request: send a conversation plus a schema,
+    /// get back one reply guaranteed to match that schema's shape.
+    ///
+    /// Unlike `text_step`, there's no separate "loop" layer above this method --
+    /// a structured-output request is always exactly one round trip, so this
+    /// method fully implements the capability by itself rather than being one
+    /// piece of something centralized elsewhere. What differs between providers
+    /// is *how* they get the model to comply with the schema (see
+    /// [`crate::structured`] for why); that strategy lives entirely inside each
+    /// provider's own implementation of this method.
+    async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "structured"))
     }
 }

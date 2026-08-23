@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use crate::provider::Provider;
+use crate::schema::ObjectSchema;
+use crate::structured::PendingStructuredRequest;
 use crate::text::PendingTextRequest;
 
 /// Maps provider names (like `"openai"`) to the [`Provider`] that handles them.
@@ -104,6 +106,45 @@ impl Registry {
     ) -> Result<PendingTextRequest, Error> {
         let provider = self.provider(provider_name)?;
         Ok(PendingTextRequest::new(provider, model))
+    }
+
+    /// Starts a structured-output request against the provider registered
+    /// under `provider_name`, targeting `model` and requiring the reply to
+    /// match `schema`. Chain `.with_*()` calls on the returned builder to
+    /// describe the conversation, then call `.generate()` to run it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnknownProvider`] if `provider_name` isn't registered.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "openai")]
+    /// # async fn example() -> Result<(), llmprism::Error> {
+    /// use llmprism::schema::{ObjectSchema, Schema, StringSchema};
+    /// use llmprism::Registry;
+    ///
+    /// let schema = ObjectSchema::new("greeting")
+    ///     .with_property(Schema::String(StringSchema::new("message")), true);
+    ///
+    /// let registry = Registry::from_env();
+    /// let response = registry
+    ///     .structured("openai", "gpt-4o-mini", schema)?
+    ///     .with_prompt("Greet the user warmly.")
+    ///     .generate()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn structured(
+        &self,
+        provider_name: &str,
+        model: impl Into<String>,
+        schema: ObjectSchema,
+    ) -> Result<PendingStructuredRequest, Error> {
+        let provider = self.provider(provider_name)?;
+        Ok(PendingStructuredRequest::new(provider, model, schema))
     }
 
     /// Builds a registry from the first-party providers that have their API key
