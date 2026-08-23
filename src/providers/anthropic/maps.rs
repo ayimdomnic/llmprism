@@ -13,9 +13,13 @@ use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::request::{TextRequest, ToolChoice};
 use crate::text::response::Step;
 use crate::tool::Tool;
-use crate::value_objects::{FinishReason, MediaPart, Message, Meta, ToolCall, ToolOutcome, Usage};
+use crate::value_objects::{
+    FinishReason, Media, MediaData, MediaPart, Message, Meta, ToolCall, ToolOutcome, Usage,
+};
 
-use super::wire::{ContentBlock, MessageParam, MessagesRequest, MessagesResponse, MessagesTool};
+use super::wire::{
+    ContentBlock, MediaSource, MessageParam, MessagesRequest, MessagesResponse, MessagesTool,
+};
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 
@@ -110,7 +114,16 @@ fn push_message(messages: &mut Vec<MessageParam>, message: &Message) {
                 .iter()
                 .filter_map(|part| match part {
                     MediaPart::Text(text) => Some(ContentBlock::Text { text: text.clone() }),
-                    _ => None,
+                    MediaPart::Image(media) => Some(ContentBlock::Image {
+                        source: to_media_source(media, "image/png"),
+                    }),
+                    MediaPart::Document(media) => Some(ContentBlock::Document {
+                        source: to_media_source(media, "application/pdf"),
+                    }),
+                    // Anthropic's Messages API has no audio/video content
+                    // block at all -- unlike Image/Document, there's no wire
+                    // shape to translate these into.
+                    MediaPart::Audio(_) | MediaPart::Video(_) => None,
                 })
                 .collect();
             messages.push(MessageParam {
@@ -160,6 +173,27 @@ fn push_message(messages: &mut Vec<MessageParam>, message: &Message) {
     }
 }
 
+/// Translates this crate's provider-agnostic [`Media`] into Anthropic's own
+/// `source` union. `default_mime_type` fills in when `media.mime_type` wasn't
+/// set -- Anthropic requires a `media_type` on a base64 source (there's
+/// nothing to infer it from the way a URL's extension might hint at one), so
+/// a value has to come from somewhere; the caller picks a sensible default
+/// for the content type it's building (e.g. `"image/png"` for
+/// [`ContentBlock::Image`], `"application/pdf"` for
+/// [`ContentBlock::Document`]).
+fn to_media_source(media: &Media, default_mime_type: &str) -> MediaSource {
+    match &media.data {
+        MediaData::Url(url) => MediaSource::Url { url: url.clone() },
+        MediaData::Base64(data) => MediaSource::Base64 {
+            media_type: media
+                .mime_type
+                .clone()
+                .unwrap_or_else(|| default_mime_type.to_string()),
+            data: data.clone(),
+        },
+    }
+}
+
 fn to_wire_tool(tool: &dyn Tool) -> MessagesTool {
     MessagesTool {
         name: tool.name().to_string(),
@@ -192,7 +226,14 @@ pub fn parse_response(response: MessagesResponse) -> Step {
                 name: name.clone(),
                 arguments: input.clone(),
             }),
-            ContentBlock::ToolResult { .. } | ContentBlock::Other => {}
+            // Image/Document blocks are something *this crate* only ever
+            // sends (as part of a user turn), never something Anthropic
+            // sends back as part of its own reply -- but the match must
+            // still be exhaustive.
+            ContentBlock::Image { .. }
+            | ContentBlock::Document { .. }
+            | ContentBlock::ToolResult { .. }
+            | ContentBlock::Other => {}
         }
     }
 
@@ -282,6 +323,7 @@ pub(crate) fn map_usage(usage: super::wire::MessagesUsage) -> Usage {
 mod tests {
     use super::super::wire::MessagesUsage;
     use super::*;
+    use crate::value_objects::UserMessage;
 
     /// A block type this crate doesn't translate (extended thinking, in this
     /// case) shouldn't stop `parse_response` from reading the text and tool
@@ -310,5 +352,50 @@ mod tests {
 
         assert_eq!(step.text.as_deref(), Some("The answer is 4."));
         assert!(step.tool_calls.is_empty());
+    }
+
+    #[test]
+    fn push_message_maps_image_and_document_parts() {
+        let user = UserMessage {
+            content: vec![
+                MediaPart::Text("What's in this file?".to_string()),
+                MediaPart::Image(Media {
+                    mime_type: None,
+                    data: MediaData::Base64("aGVsbG8=".to_string()),
+                }),
+                MediaPart::Document(Media {
+                    mime_type: Some("application/pdf".to_string()),
+                    data: MediaData::Url("https://example.com/doc.pdf".to_string()),
+                }),
+                // No wire shape exists for these in Anthropic's Messages API,
+                // so they're expected to be silently dropped rather than
+                // producing a malformed request.
+                MediaPart::Audio(Media {
+                    mime_type: None,
+                    data: MediaData::Url("https://example.com/clip.mp3".to_string()),
+                }),
+            ],
+        };
+
+        let mut messages = Vec::new();
+        push_message(&mut messages, &Message::User(user));
+
+        assert_eq!(messages.len(), 1);
+        let content = &messages[0].content;
+        assert_eq!(content.len(), 3);
+
+        assert!(matches!(content[0], ContentBlock::Text { .. }));
+        assert!(matches!(
+            &content[1],
+            ContentBlock::Image {
+                source: MediaSource::Base64 { media_type, .. }
+            } if media_type == "image/png"
+        ));
+        assert!(matches!(
+            &content[2],
+            ContentBlock::Document {
+                source: MediaSource::Url { url }
+            } if url == "https://example.com/doc.pdf"
+        ));
     }
 }

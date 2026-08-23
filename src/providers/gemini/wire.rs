@@ -49,11 +49,43 @@ pub enum Part {
     Text {
         text: String,
     },
-    /// Anything this crate doesn't produce/translate (`inlineData`,
-    /// `fileData`, `executionResult`, thought parts, ...) -- kept so a
-    /// response containing one of these doesn't fail to decode; safely
-    /// ignored wherever parts are read.
+    InlineData {
+        #[serde(rename = "inlineData")]
+        inline_data: InlineDataPart,
+    },
+    FileData {
+        #[serde(rename = "fileData")]
+        file_data: FileDataPart,
+    },
+    /// Anything else this crate doesn't produce/translate (`executionResult`,
+    /// thought parts, ...) -- kept so a response containing one of these
+    /// doesn't fail to decode; safely ignored wherever parts are read.
     Other(Value),
+}
+
+/// Media embedded directly in the request/response as base64 -- what a
+/// [`MediaPart`](crate::value_objects::MediaPart) with
+/// [`MediaData::Base64`](crate::value_objects::MediaData::Base64) becomes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InlineDataPart {
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+    pub data: String,
+}
+
+/// Media referenced by URI rather than embedded -- what a
+/// [`MediaPart`](crate::value_objects::MediaPart) with
+/// [`MediaData::Url`](crate::value_objects::MediaData::Url) becomes. Despite
+/// the name, Gemini 2.5+ models accept an ordinary public `https://` URL
+/// here directly, not just a URI from Gemini's own Files API -- earlier
+/// (2.0-family) models don't support external URLs this way and need the
+/// bytes embedded instead (use [`MediaData::Base64`](crate::value_objects::MediaData::Base64)).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileDataPart {
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+    #[serde(rename = "fileUri")]
+    pub file_uri: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

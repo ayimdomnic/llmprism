@@ -219,7 +219,10 @@ impl Provider for GeminiProvider {
                                     });
                                     finish_reason = FinishReason::ToolCalls;
                                 }
-                                Part::FunctionResponse { .. } | Part::Other(_) => {}
+                                Part::FunctionResponse { .. }
+                                | Part::InlineData { .. }
+                                | Part::FileData { .. }
+                                | Part::Other(_) => {}
                             }
                         }
                     }

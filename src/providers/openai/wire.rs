@@ -40,7 +40,7 @@ pub enum ChatMessage {
         content: String,
     },
     User {
-        content: String,
+        content: UserContent,
     },
     Assistant {
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -52,6 +52,31 @@ pub enum ChatMessage {
         tool_call_id: String,
         content: String,
     },
+}
+
+/// A user message's `content`: Chat Completions accepts either a plain
+/// string or an array of typed parts. This crate sends the plain-string
+/// shape whenever a message is text-only (the overwhelmingly common case,
+/// and the shape this crate has always sent), switching to `Parts` only once
+/// there's an image to include alongside the text -- see
+/// [`super::maps::user_content`].
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum UserContent {
+    Text(String),
+    Parts(Vec<UserContentPart>),
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UserContentPart {
+    Text { text: String },
+    ImageUrl { image_url: ImageUrl },
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImageUrl {
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

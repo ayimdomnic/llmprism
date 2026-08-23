@@ -73,9 +73,18 @@ pub struct ToolResultMessage {
 
 /// One piece of a [`UserMessage`]'s content.
 ///
-/// Only `Text` is used by anything implemented so far; the media variants are
-/// here so the shape is ready for providers/models that accept images,
-/// documents, audio, or video as part of a message.
+/// Support for the media variants varies by provider, since it varies by
+/// what each provider's own API actually accepts: OpenAI translates `Image`
+/// (there's no first-class document/PDF content part in its Chat Completions
+/// API without a separate file-upload step this crate doesn't perform, and
+/// no audio/video content part in messages at all); Anthropic translates
+/// `Image` and `Document` (it has no audio/video message content at all);
+/// Gemini translates all four, since its wire format has one uniform
+/// mime-type-tagged part shape for every media kind rather than a distinct
+/// one per kind. A variant a given provider doesn't translate is silently
+/// dropped from the request rather than causing an error -- the same
+/// "unsupported means it's just not there" convention every other capability
+/// in this crate follows.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediaPart {
     /// Plain text.

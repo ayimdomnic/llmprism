@@ -10,12 +10,13 @@ use crate::text::request::{TextRequest, ToolChoice};
 use crate::text::response::Step;
 use crate::tool::Tool;
 use crate::value_objects::{
-    FinishReason, MediaPart, Message, Meta, ToolCall, ToolOutcome, ToolResult, Usage,
+    FinishReason, Media, MediaData, MediaPart, Message, Meta, ToolCall, ToolOutcome, ToolResult,
+    Usage, UserMessage,
 };
 
 use super::wire::{
     ChatChoice, ChatMessage, ChatRequest, ChatResponse, ChatTool, ChatToolCall,
-    ChatToolCallFunction, ChatToolFunction,
+    ChatToolCallFunction, ChatToolFunction, ImageUrl, UserContent, UserContentPart,
 };
 
 pub fn build_request(request: &TextRequest) -> ChatRequest {
@@ -93,7 +94,7 @@ fn push_message(messages: &mut Vec<ChatMessage>, message: &Message) {
             content: system.content.clone(),
         }),
         Message::User(user) => messages.push(ChatMessage::User {
-            content: user_text(user),
+            content: user_content(user),
         }),
         Message::Assistant(assistant) => messages.push(ChatMessage::Assistant {
             content: assistant.content.clone(),
@@ -110,7 +111,61 @@ fn push_message(messages: &mut Vec<ChatMessage>, message: &Message) {
     }
 }
 
-fn user_text(user: &crate::value_objects::UserMessage) -> String {
+/// Builds a user message's `content`. Chat Completions has no first-class
+/// document/PDF content part the way Anthropic and Gemini do -- OpenAI's
+/// equivalent needs uploading through the separate Files API and referencing
+/// it by id, a whole extra request/response round trip this crate's
+/// synchronous "translate one message into one wire value" mapping functions
+/// aren't shaped for -- and no audio/video content part in Chat Completions
+/// messages at all, so [`MediaPart::Document`]/`Audio`/`Video` are silently
+/// dropped here, the same as they are for every provider that has no wire
+/// shape for them.
+pub(crate) fn user_content(user: &UserMessage) -> UserContent {
+    let has_image = user
+        .content
+        .iter()
+        .any(|part| matches!(part, MediaPart::Image(_)));
+
+    if !has_image {
+        // Keep sending the plain-string shape whenever there's nothing but
+        // text -- it's what this crate has always sent for a text-only
+        // message, and there's no reason to switch every request to the
+        // more verbose array shape just because *some* requests need it.
+        return UserContent::Text(user_text(user));
+    }
+
+    let parts = user
+        .content
+        .iter()
+        .filter_map(|part| match part {
+            MediaPart::Text(text) => Some(UserContentPart::Text { text: text.clone() }),
+            MediaPart::Image(media) => Some(UserContentPart::ImageUrl {
+                image_url: ImageUrl {
+                    url: image_url_string(media),
+                },
+            }),
+            MediaPart::Document(_) | MediaPart::Audio(_) | MediaPart::Video(_) => None,
+        })
+        .collect();
+
+    UserContent::Parts(parts)
+}
+
+/// The `image_url.url` value for a [`MediaPart::Image`]: passed through
+/// as-is for a real URL, or turned into a `data:` URI for embedded bytes --
+/// OpenAI accepts both in the same field, with no separate "base64" shape
+/// the way Anthropic and Gemini have.
+fn image_url_string(media: &Media) -> String {
+    match &media.data {
+        MediaData::Url(url) => url.clone(),
+        MediaData::Base64(data) => {
+            let mime_type = media.mime_type.as_deref().unwrap_or("image/png");
+            format!("data:{mime_type};base64,{data}")
+        }
+    }
+}
+
+fn user_text(user: &UserMessage) -> String {
     user.content
         .iter()
         .filter_map(|part| match part {
@@ -286,5 +341,55 @@ pub(crate) fn map_usage(usage: super::wire::ChatUsage) -> Usage {
         cache_write_tokens: None,
         cache_read_tokens: usage.prompt_tokens_details.and_then(|d| d.cached_tokens),
         thought_tokens: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_content_stays_a_plain_string_for_text_only_messages() {
+        let user = UserMessage::text("hello");
+        assert!(matches!(user_content(&user), UserContent::Text(text) if text == "hello"));
+    }
+
+    #[test]
+    fn user_content_switches_to_parts_when_an_image_is_present() {
+        let user = UserMessage {
+            content: vec![
+                MediaPart::Text("What's in this image?".to_string()),
+                MediaPart::Image(Media {
+                    mime_type: None,
+                    data: MediaData::Base64("aGVsbG8=".to_string()),
+                }),
+                // No wire shape exists for documents in Chat Completions
+                // messages, so this should be silently dropped.
+                MediaPart::Document(Media {
+                    mime_type: Some("application/pdf".to_string()),
+                    data: MediaData::Url("https://example.com/doc.pdf".to_string()),
+                }),
+            ],
+        };
+
+        let UserContent::Parts(parts) = user_content(&user) else {
+            panic!("expected UserContent::Parts once an image is present");
+        };
+
+        assert_eq!(parts.len(), 2);
+        assert!(matches!(parts[0], UserContentPart::Text { .. }));
+        assert!(matches!(
+            &parts[1],
+            UserContentPart::ImageUrl { image_url } if image_url.url == "data:image/png;base64,aGVsbG8="
+        ));
+    }
+
+    #[test]
+    fn image_url_string_passes_a_real_url_through_unchanged() {
+        let media = Media {
+            mime_type: None,
+            data: MediaData::Url("https://example.com/cat.png".to_string()),
+        };
+        assert_eq!(image_url_string(&media), "https://example.com/cat.png");
     }
 }

@@ -35,6 +35,12 @@ pub enum ContentBlock {
     Text {
         text: String,
     },
+    Image {
+        source: MediaSource,
+    },
+    Document {
+        source: MediaSource,
+    },
     ToolUse {
         id: String,
         name: String,
@@ -55,6 +61,16 @@ pub enum ContentBlock {
     /// [`StreamContentBlockStart::Other`], its streaming counterpart.
     #[serde(other)]
     Other,
+}
+
+/// Where a [`ContentBlock::Image`]/[`ContentBlock::Document`]'s bytes
+/// actually are -- Anthropic's own union of the two ways this crate's
+/// [`Media`](crate::value_objects::Media) can hold data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MediaSource {
+    Url { url: String },
+    Base64 { media_type: String, data: String },
 }
 
 #[derive(Debug, Serialize)]

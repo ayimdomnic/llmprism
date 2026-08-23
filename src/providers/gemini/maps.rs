@@ -22,12 +22,14 @@ use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::request::{TextRequest, ToolChoice};
 use crate::text::response::Step;
 use crate::tool::Tool;
-use crate::value_objects::{FinishReason, MediaPart, Message, Meta, ToolCall, ToolOutcome, Usage};
+use crate::value_objects::{
+    FinishReason, Media, MediaData, MediaPart, Message, Meta, ToolCall, ToolOutcome, Usage,
+};
 
 use super::wire::{
-    Content, FunctionCallPart, FunctionCallingConfig, FunctionDeclaration, FunctionResponsePart,
-    GenerateContentRequest, GenerateContentResponse, GenerationConfig, Part, SystemInstruction,
-    ToolConfig, ToolDeclaration, UsageMetadata,
+    Content, FileDataPart, FunctionCallPart, FunctionCallingConfig, FunctionDeclaration,
+    FunctionResponsePart, GenerateContentRequest, GenerateContentResponse, GenerationConfig,
+    InlineDataPart, Part, SystemInstruction, ToolConfig, ToolDeclaration, UsageMetadata,
 };
 
 pub fn build_request(request: &TextRequest) -> GenerateContentRequest {
@@ -100,6 +102,34 @@ fn build_tools(tools: &[std::sync::Arc<dyn Tool>]) -> Vec<ToolDeclaration> {
     }]
 }
 
+/// Translates this crate's provider-agnostic [`Media`] into a Gemini part --
+/// `inlineData` for embedded bytes, `fileData` for a URI, mime type carried
+/// on both either way. `default_mime_type` fills in when `media.mime_type`
+/// wasn't set, since Gemini requires one; the caller picks a sensible
+/// default for the media kind it's building (e.g. `"image/png"` for
+/// [`MediaPart::Image`]).
+fn to_media_part(media: &Media, default_mime_type: &str) -> Part {
+    let mime_type = media
+        .mime_type
+        .clone()
+        .unwrap_or_else(|| default_mime_type.to_string());
+
+    match &media.data {
+        MediaData::Url(uri) => Part::FileData {
+            file_data: FileDataPart {
+                mime_type,
+                file_uri: uri.clone(),
+            },
+        },
+        MediaData::Base64(data) => Part::InlineData {
+            inline_data: InlineDataPart {
+                mime_type,
+                data: data.clone(),
+            },
+        },
+    }
+}
+
 fn to_wire_tool(tool: &dyn Tool) -> FunctionDeclaration {
     FunctionDeclaration {
         name: tool.name().to_string(),
@@ -142,9 +172,17 @@ fn push_message(contents: &mut Vec<Content>, message: &Message) {
             let parts = user
                 .content
                 .iter()
-                .filter_map(|part| match part {
-                    MediaPart::Text(text) => Some(Part::Text { text: text.clone() }),
-                    _ => None,
+                .map(|part| match part {
+                    MediaPart::Text(text) => Part::Text { text: text.clone() },
+                    // Gemini has no distinct wire shape per media kind the
+                    // way Anthropic (image/document) or OpenAI (image only)
+                    // do -- every kind of media becomes the same
+                    // `inlineData`/`fileData` part, told apart purely by
+                    // mime type, so all four map through the same helper.
+                    MediaPart::Image(media) => to_media_part(media, "image/png"),
+                    MediaPart::Document(media) => to_media_part(media, "application/pdf"),
+                    MediaPart::Audio(media) => to_media_part(media, "audio/mpeg"),
+                    MediaPart::Video(media) => to_media_part(media, "video/mp4"),
                 })
                 .collect();
             contents.push(Content {
@@ -294,7 +332,14 @@ fn read_parts(content: Option<Content>) -> (Option<String>, Vec<ToolCall>) {
                     name: function_call.name,
                     arguments: function_call.args,
                 }),
-                Part::FunctionResponse { .. } | Part::Other(_) => {}
+                // Gemini doesn't send media parts back as part of its own
+                // reply -- `InlineData`/`FileData` are only something *this
+                // crate* produces, for a user turn -- but the match must
+                // still be exhaustive.
+                Part::FunctionResponse { .. }
+                | Part::InlineData { .. }
+                | Part::FileData { .. }
+                | Part::Other(_) => {}
             }
         }
     }
@@ -328,5 +373,63 @@ pub(crate) fn map_usage(usage: UsageMetadata) -> Usage {
         cache_write_tokens: None,
         cache_read_tokens: usage.cached_content_token_count,
         thought_tokens: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::value_objects::UserMessage;
+
+    #[test]
+    fn push_message_maps_every_media_kind_to_the_same_part_shape() {
+        let user = UserMessage {
+            content: vec![
+                MediaPart::Text("What's this?".to_string()),
+                MediaPart::Image(Media {
+                    mime_type: None,
+                    data: MediaData::Base64("aGVsbG8=".to_string()),
+                }),
+                MediaPart::Document(Media {
+                    mime_type: Some("application/pdf".to_string()),
+                    data: MediaData::Url("https://example.com/doc.pdf".to_string()),
+                }),
+                MediaPart::Audio(Media {
+                    mime_type: None,
+                    data: MediaData::Url("https://example.com/clip.mp3".to_string()),
+                }),
+                MediaPart::Video(Media {
+                    mime_type: None,
+                    data: MediaData::Base64("d29ybGQ=".to_string()),
+                }),
+            ],
+        };
+
+        let mut contents = Vec::new();
+        push_message(&mut contents, &Message::User(user));
+
+        assert_eq!(contents.len(), 1);
+        let parts = &contents[0].parts;
+        assert_eq!(parts.len(), 5);
+
+        assert!(matches!(parts[0], Part::Text { .. }));
+        assert!(matches!(
+            &parts[1],
+            Part::InlineData { inline_data } if inline_data.mime_type == "image/png"
+        ));
+        assert!(matches!(
+            &parts[2],
+            Part::FileData { file_data }
+                if file_data.mime_type == "application/pdf"
+                    && file_data.file_uri == "https://example.com/doc.pdf"
+        ));
+        assert!(matches!(
+            &parts[3],
+            Part::FileData { file_data } if file_data.mime_type == "audio/mpeg"
+        ));
+        assert!(matches!(
+            &parts[4],
+            Part::InlineData { inline_data } if inline_data.mime_type == "video/mp4"
+        ));
     }
 }
