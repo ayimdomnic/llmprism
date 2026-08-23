@@ -1,5 +1,10 @@
 # llmprism
 
+[![Crates.io](https://img.shields.io/crates/v/llmprism.svg)](https://crates.io/crates/llmprism)
+[![docs.rs](https://img.shields.io/docsrs/llmprism)](https://docs.rs/llmprism)
+[![CI](https://github.com/ayimdomnic/llmprism/actions/workflows/ci.yml/badge.svg)](https://github.com/ayimdomnic/llmprism/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 `llmprism` is a Rust library for talking to Large Language Model providers -- 13 of
 them, from OpenAI and Anthropic to Gemini, Ollama, and more -- through one
 consistent, fluent API instead of learning each provider's own SDK and JSON shape.
