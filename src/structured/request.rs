@@ -23,6 +23,12 @@ pub struct StructuredRequest {
     /// for a text request, since a structured request without a schema isn't a
     /// meaningful thing to send.
     pub schema: ObjectSchema,
+    /// Marks the system prompt as a cache breakpoint on providers that
+    /// support explicit prompt caching (currently just Anthropic; ignored
+    /// elsewhere). See
+    /// [`TextRequest::cache_system_prompt`](crate::text::TextRequest::cache_system_prompt)
+    /// for when this is worth turning on. Defaults to `false`.
+    pub cache_system_prompt: bool,
     /// Extra provider-specific fields to send alongside this request, for
     /// options this crate doesn't model as a typed field yet. Must be a JSON
     /// object to have any effect: each of its top-level keys is merged into
@@ -42,6 +48,7 @@ impl StructuredRequest {
             temperature: None,
             top_p: None,
             schema,
+            cache_system_prompt: false,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -140,6 +147,15 @@ impl PendingStructuredRequest {
     /// Sets the nucleus-sampling cutoff (`top_p`).
     pub fn with_top_p(mut self, top_p: f32) -> Self {
         self.request.top_p = Some(top_p);
+        self
+    }
+
+    /// Marks the system prompt as a cache breakpoint on providers that
+    /// support explicit prompt caching (currently just Anthropic; a no-op
+    /// elsewhere). See [`StructuredRequest::cache_system_prompt`] for when
+    /// this is worth turning on.
+    pub fn with_prompt_caching(mut self) -> Self {
+        self.request.cache_system_prompt = true;
         self
     }
 

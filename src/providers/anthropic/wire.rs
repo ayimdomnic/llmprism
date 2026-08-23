@@ -9,7 +9,7 @@ pub struct MessagesRequest {
     pub model: String,
     pub max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<String>,
+    pub system: Option<SystemPrompt>,
     pub messages: Vec<MessageParam>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
@@ -21,6 +21,43 @@ pub struct MessagesRequest {
     pub tool_choice: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
+}
+
+/// The `system` field: a plain string normally, matching the simplest shape
+/// Anthropic accepts, or an array of one text block carrying a
+/// `cache_control` breakpoint when prompt caching is requested (see
+/// [`super::maps::build_system`]) -- Anthropic has no way to attach
+/// `cache_control` to a plain string, only to a content block, so caching
+/// the system prompt means sending it in the more verbose shape instead.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum SystemPrompt {
+    Text(String),
+    Blocks(Vec<SystemBlock>),
+}
+
+#[derive(Debug, Serialize)]
+pub struct SystemBlock {
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
+}
+
+/// A cache breakpoint on a content block. Only the `"ephemeral"` kind exists
+/// today, so this crate doesn't model `kind` as a real field -- there's
+/// nothing meaningful for a caller to set it to.
+#[derive(Debug, Serialize)]
+pub struct CacheControl {
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+}
+
+impl CacheControl {
+    pub fn ephemeral() -> Self {
+        Self { kind: "ephemeral" }
+    }
 }
 
 #[derive(Debug, Serialize)]

@@ -18,17 +18,14 @@ use crate::value_objects::{
 };
 
 use super::wire::{
-    ContentBlock, MediaSource, MessageParam, MessagesRequest, MessagesResponse, MessagesTool,
+    CacheControl, ContentBlock, MediaSource, MessageParam, MessagesRequest, MessagesResponse,
+    MessagesTool, SystemBlock, SystemPrompt,
 };
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 
 pub fn build_request(request: &TextRequest) -> MessagesRequest {
-    let system = if request.system_prompts.is_empty() {
-        None
-    } else {
-        Some(request.system_prompts.join("\n\n"))
-    };
+    let system = build_system(&request.system_prompts, request.cache_system_prompt);
 
     let mut messages = Vec::new();
     for message in &request.messages {
@@ -62,11 +59,7 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
 /// application's point of view, this is purely a way to get schema-shaped
 /// output.
 pub fn build_structured_request(request: &StructuredRequest) -> MessagesRequest {
-    let system = if request.system_prompts.is_empty() {
-        None
-    } else {
-        Some(request.system_prompts.join("\n\n"))
-    };
+    let system = build_system(&request.system_prompts, request.cache_system_prompt);
 
     let mut messages = Vec::new();
     for message in &request.messages {
@@ -94,6 +87,29 @@ pub fn build_structured_request(request: &StructuredRequest) -> MessagesRequest 
         }],
         tool_choice: Some(json!({"type": "tool", "name": tool_name})),
         stream: None,
+    }
+}
+
+/// Builds the `system` field: `None` if there's nothing to send, a plain
+/// string in the common case, or -- when `cache_system_prompt` is set -- a
+/// single text block carrying an `"ephemeral"` [`CacheControl`] breakpoint
+/// instead, since Anthropic can only attach `cache_control` to a content
+/// block, not a plain string. See [`TextRequest::cache_system_prompt`].
+fn build_system(system_prompts: &[String], cache_system_prompt: bool) -> Option<SystemPrompt> {
+    if system_prompts.is_empty() {
+        return None;
+    }
+
+    let text = system_prompts.join("\n\n");
+
+    if cache_system_prompt {
+        Some(SystemPrompt::Blocks(vec![SystemBlock {
+            kind: "text",
+            text,
+            cache_control: Some(CacheControl::ephemeral()),
+        }]))
+    } else {
+        Some(SystemPrompt::Text(text))
     }
 }
 
@@ -397,5 +413,28 @@ mod tests {
                 source: MediaSource::Url { url }
             } if url == "https://example.com/doc.pdf"
         ));
+    }
+
+    #[test]
+    fn build_system_sends_a_plain_string_when_caching_is_off() {
+        let system = build_system(&["Be concise.".to_string()], false);
+        assert!(matches!(system, Some(SystemPrompt::Text(text)) if text == "Be concise."));
+    }
+
+    #[test]
+    fn build_system_sends_a_cached_block_when_caching_is_on() {
+        let system = build_system(&["Be concise.".to_string()], true);
+        let Some(SystemPrompt::Blocks(blocks)) = system else {
+            panic!("expected SystemPrompt::Blocks when cache_system_prompt is true");
+        };
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].text, "Be concise.");
+        assert!(blocks[0].cache_control.is_some());
+    }
+
+    #[test]
+    fn build_system_is_none_with_no_system_prompts_even_when_caching_is_on() {
+        assert!(build_system(&[], true).is_none());
     }
 }

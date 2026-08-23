@@ -76,6 +76,15 @@ pub struct TextRequest {
     /// How much freedom the model has to decide whether to call a tool. See
     /// [`ToolChoice`].
     pub tool_choice: ToolChoice,
+    /// Marks the system prompt as a cache breakpoint on providers that
+    /// support explicit prompt caching (currently just Anthropic; ignored
+    /// elsewhere). Worth setting whenever `system_prompts` is long and
+    /// reused across many requests (a large, mostly-static persona or style
+    /// guide, for example) -- a cached prompt costs more on the request that
+    /// writes the cache but substantially less on every later request that
+    /// hits it, within the provider's cache lifetime. Defaults to `false`;
+    /// see [`with_prompt_caching`](PendingTextRequest::with_prompt_caching).
+    pub cache_system_prompt: bool,
     /// Extra provider-specific fields to send alongside this request, for
     /// options this crate doesn't model as a typed field yet. Must be a JSON
     /// object to have any effect: each of its top-level keys is merged into
@@ -99,6 +108,7 @@ impl TextRequest {
             max_steps: 1,
             tools: Vec::new(),
             tool_choice: ToolChoice::Auto,
+            cache_system_prompt: false,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -235,6 +245,15 @@ impl PendingTextRequest {
     /// [`ToolChoice`]. Has no effect unless tools are attached.
     pub fn with_tool_choice(mut self, choice: ToolChoice) -> Self {
         self.request.tool_choice = choice;
+        self
+    }
+
+    /// Marks the system prompt as a cache breakpoint on providers that
+    /// support explicit prompt caching (currently just Anthropic; a no-op
+    /// elsewhere). See [`TextRequest::cache_system_prompt`] for when this is
+    /// worth turning on.
+    pub fn with_prompt_caching(mut self) -> Self {
+        self.request.cache_system_prompt = true;
         self
     }
 
