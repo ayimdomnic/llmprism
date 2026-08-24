@@ -562,4 +562,14 @@ mod tests {
 
         assert!(wire_request.tool_choice.is_some());
     }
+
+    #[test]
+    fn build_request_passes_stop_sequences_through() {
+        let mut request = TextRequest::new("claude-3-5-haiku-20241022");
+        request.stop_sequences = vec!["STOP".to_string()];
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(wire_request.stop_sequences, vec!["STOP"]);
+    }
 }

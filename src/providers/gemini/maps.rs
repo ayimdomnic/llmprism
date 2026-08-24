@@ -47,6 +47,7 @@ pub fn build_request(request: &TextRequest) -> GenerateContentRequest {
             top_p: request.top_p,
             response_mime_type: None,
             response_json_schema: None,
+            stop_sequences: request.stop_sequences.clone(),
         }),
         tools: build_tools(&request.tools, &request.provider_tools),
         tool_config: to_wire_tool_config(
@@ -75,6 +76,9 @@ pub fn build_structured_request(request: &StructuredRequest) -> GenerateContentR
             top_p: request.top_p,
             response_mime_type: Some("application/json".to_string()),
             response_json_schema: Some(to_json_schema(&Schema::Object(request.schema.clone()))),
+            // `StructuredRequest` has no `stop_sequences` field -- see its
+            // own doc comment for why.
+            stop_sequences: Vec::new(),
         }),
         tools: Vec::new(),
         tool_config: None,
@@ -465,5 +469,18 @@ mod tests {
         let wire_request = build_request(&request);
 
         assert!(wire_request.tool_config.is_some());
+    }
+
+    #[test]
+    fn build_request_passes_stop_sequences_through() {
+        let mut request = TextRequest::new("gemini-2.5-flash");
+        request.stop_sequences = vec!["STOP".to_string()];
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(
+            wire_request.generation_config.unwrap().stop_sequences,
+            vec!["STOP"]
+        );
     }
 }

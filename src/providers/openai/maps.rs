@@ -413,4 +413,16 @@ mod tests {
         let wire_request = build_request(&request);
         assert_eq!(wire_request.reasoning_effort.as_deref(), Some("high"));
     }
+
+    #[test]
+    fn build_request_passes_stop_sequences_and_seed_through() {
+        let mut request = TextRequest::new("gpt-4o-mini");
+        request.stop_sequences = vec!["STOP".to_string(), "END".to_string()];
+        request.seed = Some(42);
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(wire_request.stop, vec!["STOP", "END"]);
+        assert_eq!(wire_request.seed, Some(42));
+    }
 }
