@@ -9,6 +9,7 @@ use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
 use crate::tool::Tool;
+use crate::tool_loop::StopCondition;
 use crate::value_objects::{Message, UserMessage};
 
 use super::response::TextResponse;
@@ -84,6 +85,11 @@ pub struct TextRequest {
     /// [`TextRequest::new`] -- raise it with
     /// [`PendingTextRequest::with_max_steps`] if you're attaching tools.
     pub max_steps: u32,
+    /// Extra conditions, checked after every round trip alongside
+    /// `max_steps`, that can end the tool-calling loop early. Empty by
+    /// default. See [`StopCondition`] and
+    /// [`with_stop_when`](PendingTextRequest::with_stop_when).
+    pub stop_when: Vec<Arc<dyn StopCondition>>,
     /// Tools the model is allowed to call during this request. See [`Tool`].
     pub tools: Vec<Arc<dyn Tool>>,
     /// Provider-native tools -- built-in, server-side capabilities like web
@@ -154,6 +160,7 @@ impl TextRequest {
             stop_sequences: Vec::new(),
             seed: None,
             max_steps: 1,
+            stop_when: Vec::new(),
             tools: Vec::new(),
             provider_tools: Vec::new(),
             tool_choice: ToolChoice::Auto,
@@ -287,6 +294,16 @@ impl PendingTextRequest {
     /// tool call and a follow-up reply).
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
         self.request.max_steps = max_steps;
+        self
+    }
+
+    /// Adds a condition that can end the tool-calling loop early, checked
+    /// after every round trip alongside `max_steps`. Call this more than
+    /// once to attach several -- the loop stops as soon as any one of them
+    /// (or `max_steps`, or the model simply not asking for another tool
+    /// call) says to. See [`StopCondition`].
+    pub fn with_stop_when(mut self, condition: impl StopCondition + 'static) -> Self {
+        self.request.stop_when.push(Arc::new(condition));
         self
     }
 

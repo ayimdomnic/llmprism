@@ -91,7 +91,12 @@ pub fn stream_text(
                 meta,
             });
 
-            if !has_tool_calls || steps.len() as u32 >= request.max_steps {
+            let stop_condition_met = request
+                .stop_when
+                .iter()
+                .any(|condition| condition.should_stop(&steps));
+
+            if !has_tool_calls || steps.len() as u32 >= request.max_steps || stop_condition_met {
                 yield StreamEvent::StreamEnd {
                     response: TextResponse::from_steps(steps),
                 };

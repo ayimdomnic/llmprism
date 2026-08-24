@@ -137,3 +137,59 @@ async fn streaming_runs_a_tool_call_and_continues_into_a_second_round_trip() {
         other => panic!("expected the stream to end with StreamEnd, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn with_stop_when_ends_the_stream_before_running_the_pending_tool_call() {
+    use llmprism::text::Step;
+    use llmprism::tool_loop::StopCondition;
+
+    struct ToolWasRequested(&'static str);
+
+    impl StopCondition for ToolWasRequested {
+        fn should_stop(&self, steps: &[Step]) -> bool {
+            steps
+                .last()
+                .is_some_and(|step| step.tool_calls.iter().any(|call| call.name == self.0))
+        }
+    }
+
+    // Same shape as `streaming_runs_a_tool_call_and_continues_into_a_second_round_trip`,
+    // but `stop_when` should end the stream after the first round trip
+    // instead of continuing into the second queued response.
+    let provider = FakeProvider::new("fake")
+        .respond_with(FakeTextResponse::new("").with_tool_call(
+            "call_1",
+            "echo",
+            json!({"message": "hi"}),
+        ))
+        .respond_with(FakeTextResponse::new("done"));
+
+    let mut registry = Registry::new();
+    registry.register("fake", provider);
+
+    let events: Vec<StreamEvent> = registry
+        .text("fake", "test-model")
+        .unwrap()
+        .with_prompt("say hi")
+        .with_tool(EchoTool::new())
+        .with_max_steps(5)
+        .with_stop_when(ToolWasRequested("echo"))
+        .stream()
+        .map(|event| event.unwrap())
+        .collect()
+        .await;
+
+    let stream_starts = events
+        .iter()
+        .filter(|e| matches!(e, StreamEvent::StreamStart { .. }))
+        .count();
+    assert_eq!(stream_starts, 1);
+
+    match events.last() {
+        Some(StreamEvent::StreamEnd { response }) => {
+            assert_eq!(response.finish_reason, FinishReason::ToolCalls);
+            assert_eq!(response.steps.len(), 1);
+        }
+        other => panic!("expected the stream to end with StreamEnd, got {other:?}"),
+    }
+}

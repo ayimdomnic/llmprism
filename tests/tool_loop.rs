@@ -102,6 +102,50 @@ async fn tool_loop_stops_at_max_steps_even_with_pending_tool_calls() {
 }
 
 #[tokio::test]
+async fn with_stop_when_ends_the_loop_before_running_the_pending_tool_call() {
+    use llmprism::text::Step;
+    use llmprism::tool_loop::StopCondition;
+
+    struct ToolWasRequested(&'static str);
+
+    impl StopCondition for ToolWasRequested {
+        fn should_stop(&self, steps: &[Step]) -> bool {
+            steps
+                .last()
+                .is_some_and(|step| step.tool_calls.iter().any(|call| call.name == self.0))
+        }
+    }
+
+    // Two tool-call responses queued, but `stop_when` should end the loop
+    // right after the first one -- if it didn't, the second queued response
+    // would get consumed too and `steps.len()` would be 2.
+    let provider = FakeProvider::new("fake")
+        .respond_with(FakeTextResponse::new("").with_tool_call(
+            "call_1",
+            "echo",
+            json!({"message": "hi"}),
+        ))
+        .respond_with(FakeTextResponse::new("done"));
+
+    let mut registry = Registry::new();
+    registry.register("fake", provider);
+
+    let response = registry
+        .text("fake", "test-model")
+        .unwrap()
+        .with_prompt("say hi")
+        .with_tool(EchoTool::new())
+        .with_max_steps(5)
+        .with_stop_when(ToolWasRequested("echo"))
+        .generate()
+        .await
+        .unwrap();
+
+    assert_eq!(response.finish_reason, FinishReason::ToolCalls);
+    assert_eq!(response.steps.len(), 1);
+}
+
+#[tokio::test]
 async fn unknown_tool_call_surfaces_as_a_tool_error_result_instead_of_failing() {
     let provider = FakeProvider::new("fake")
         .respond_with(FakeTextResponse::new("").with_tool_call(
