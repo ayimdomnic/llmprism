@@ -117,6 +117,10 @@ the providers you actually use. Turn on everything with the `full` feature.
   Schema dialect. OpenAI and Anthropic get there differently under the hood (a
   native enforced response format vs. a forced tool call); you get the same
   `StructuredResponse` back either way.
+- **`ProviderMiddleware`** wraps a registered provider to intercept its calls
+  from outside its own implementation -- logging, caching, redaction, a
+  default system prompt, or short-circuiting a call entirely. Attach one with
+  `Registry::wrap`; middlewares compose.
 
 Run `cargo doc --open --all-features` for the full reference -- every public type
 has a plain-language explanation of what it's for and, where it helps, a short

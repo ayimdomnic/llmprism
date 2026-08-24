@@ -9,7 +9,37 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-Nothing yet.
+Borrowed from a comparison against Vercel's AI SDK, scoped to what matters
+for server-side Rust applications.
+
+### Added
+
+- **`ProviderMiddleware`** and `Registry::wrap`: wrap a registered provider to
+  intercept its calls from outside its own implementation -- transform a
+  request, transform or replace a response, or skip the call entirely (a
+  cache hit, a policy rejection). Middlewares compose.
+- **`StopCondition`** and `TextRequest::stop_when`: end the tool-calling loop
+  early for a reason other than `max_steps`, in both the non-streaming and
+  streaming loops.
+- **`RepairStrategy`** and `StructuredRequest::with_repair`: salvage a
+  structured-output reply that fails to decode (a stray Markdown code fence,
+  a model that didn't call the forced tool) instead of failing outright.
+  `Error::StructuredDecode` now carries the raw response text and what the
+  response's finish reason/usage/metadata would have been, boxed into a new
+  `StructuredDecodeContext` to avoid inflating every other `Result<_, Error>`
+  in the crate.
+- **Rerank capability** (VoyageAI): score and sort documents by relevance to
+  a query, via `Registry::rerank`.
+- **Configurable HTTP retry policy**: `client::build_http_client_with_max_retries`
+  and `client::build_http_client_with_retry_strategy` replace the old
+  fixed-at-2-retries default. Along the way, fixed a stale doc claim that
+  `429`/`529` weren't retried by default -- `reqwest-retry`'s
+  `DefaultRetryableStrategy` (used unmodified by every provider's default
+  client all along) already retries both.
+- **`TextRequest`/`StructuredRequest`** gained typed `stop_sequences`/`seed`
+  fields (`stop_sequences` on `TextRequest` only -- a stop string can
+  truncate otherwise-valid JSON, which cuts against the point of a
+  structured request).
 
 ## [0.1.1] - 2026-08-24
 
