@@ -7,6 +7,7 @@ use crate::audio::{AudioInput, PendingSpeechToTextRequest, PendingTextToSpeechRe
 use crate::embeddings::PendingEmbeddingsRequest;
 use crate::error::Error;
 use crate::images::PendingImagesRequest;
+use crate::middleware::{MiddlewareProvider, ProviderMiddleware};
 use crate::moderation::PendingModerationRequest;
 use crate::provider::Provider;
 use crate::rerank::PendingRerankRequest;
@@ -62,6 +63,58 @@ impl Registry {
     /// `Arc<dyn Provider>` -- for example, one reused across multiple registries.
     pub fn register_arc(&mut self, name: impl Into<String>, provider: Arc<dyn Provider>) {
         self.providers.insert(name.into(), provider);
+    }
+
+    /// Wraps the provider registered under `name` with `middleware`, replacing
+    /// its registration in place -- every capability call made through this
+    /// registry against `name` now goes through `middleware` first. See
+    /// [`ProviderMiddleware`] for what a middleware can do.
+    ///
+    /// Middlewares compose: calling `wrap` again on a name that's already
+    /// wrapped nests the new middleware around the existing one, so the most
+    /// recently attached middleware sees a call first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnknownProvider`] if nothing is registered under `name`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use async_trait::async_trait;
+    /// use llmprism::middleware::ProviderMiddleware;
+    /// use llmprism::testing::{FakeProvider, FakeTextResponse};
+    /// use llmprism::text::{Step, TextRequest};
+    /// use llmprism::{Error, Provider, Registry};
+    ///
+    /// struct AddSystemPrompt(&'static str);
+    ///
+    /// #[async_trait]
+    /// impl ProviderMiddleware for AddSystemPrompt {
+    ///     async fn text_step(&self, mut request: TextRequest, next: &dyn Provider) -> Result<Step, Error> {
+    ///         request.system_prompts.insert(0, self.0.to_string());
+    ///         next.text_step(request).await
+    ///     }
+    /// }
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Error> {
+    /// let mut registry = Registry::new();
+    /// registry.register("fake", FakeProvider::new("fake").respond_with(FakeTextResponse::new("hi")));
+    /// registry.wrap("fake", AddSystemPrompt("Be concise."))?;
+    ///
+    /// registry.text("fake", "test-model")?.with_prompt("hello").generate().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn wrap(
+        &mut self,
+        name: &str,
+        middleware: impl ProviderMiddleware + 'static,
+    ) -> Result<(), Error> {
+        let inner = self.provider(name)?;
+        self.register_arc(name, Arc::new(MiddlewareProvider::new(inner, middleware)));
+        Ok(())
     }
 
     /// Looks up the provider registered under `name`.

@@ -140,6 +140,7 @@ pub mod audio;
 pub mod embeddings;
 pub mod error;
 pub mod images;
+pub mod middleware;
 pub mod moderation;
 pub mod provider;
 pub mod registry;
