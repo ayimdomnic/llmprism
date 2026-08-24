@@ -65,6 +65,19 @@ pub struct TextRequest {
     /// Nucleus-sampling cutoff. `None` leaves this up to the provider's own
     /// default.
     pub top_p: Option<f32>,
+    /// Strings that stop generation the moment the model produces one of
+    /// them (the stop string itself isn't included in the reply). Supported
+    /// by OpenAI (`stop`), Anthropic (`stop_sequences`), and Gemini
+    /// (`stopSequences`); ignored elsewhere. `None`/empty leaves this up to
+    /// the provider's own default (usually "no extra stop strings").
+    pub stop_sequences: Vec<String>,
+    /// A seed for providers whose backend can honor one (OpenAI's `seed`;
+    /// most other providers have no equivalent and ignore this). Requesting
+    /// a seed makes output *more* reproducible across identical requests,
+    /// not guaranteed-deterministic -- treat it as a best-effort hint, the
+    /// same way the provider itself does. `None` leaves this up to the
+    /// provider's own default (unseeded).
+    pub seed: Option<u64>,
     /// The maximum number of request/response round trips the tool-calling loop
     /// will run before stopping, even if the model keeps asking for more tool
     /// calls. Defaults to `1` (a single round trip, i.e. no tool-calling loop) via
@@ -138,6 +151,8 @@ impl TextRequest {
             max_tokens: None,
             temperature: None,
             top_p: None,
+            stop_sequences: Vec::new(),
+            seed: None,
             max_steps: 1,
             tools: Vec::new(),
             provider_tools: Vec::new(),
@@ -247,6 +262,21 @@ impl PendingTextRequest {
     /// tune one of `temperature` or `top_p`, not both.
     pub fn with_top_p(mut self, top_p: f32) -> Self {
         self.request.top_p = Some(top_p);
+        self
+    }
+
+    /// Adds a string that stops generation the moment the model produces it.
+    /// Call this more than once to add several. See
+    /// [`TextRequest::stop_sequences`] for which providers support this.
+    pub fn with_stop_sequence(mut self, stop: impl Into<String>) -> Self {
+        self.request.stop_sequences.push(stop.into());
+        self
+    }
+
+    /// Sets a seed for providers whose backend can honor one. See
+    /// [`TextRequest::seed`] for what "honor" means here.
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.request.seed = Some(seed);
         self
     }
 

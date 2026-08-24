@@ -48,6 +48,8 @@ pub fn build_request(request: &TextRequest) -> ChatRequest {
         stream_options: None,
         response_format: None,
         reasoning_effort: request.reasoning_effort.clone(),
+        stop: request.stop_sequences.clone(),
+        seed: request.seed,
     }
 }
 
@@ -87,6 +89,8 @@ pub fn build_structured_request(request: &StructuredRequest) -> ChatRequest {
             }
         })),
         reasoning_effort: request.reasoning_effort.clone(),
+        stop: Vec::new(),
+        seed: request.seed,
     }
 }
 

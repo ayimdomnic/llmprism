@@ -128,6 +128,8 @@ pub struct GenerationConfig {
     /// Gemini.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_json_schema: Option<Value>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stop_sequences: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

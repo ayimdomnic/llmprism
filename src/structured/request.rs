@@ -34,6 +34,13 @@ pub struct StructuredRequest {
     /// [`TextRequest::reasoning_effort`](crate::text::TextRequest::reasoning_effort)
     /// for which providers and models this applies to.
     pub reasoning_effort: Option<String>,
+    /// A seed for providers whose backend can honor one. See
+    /// [`TextRequest::seed`](crate::text::TextRequest::seed) for what
+    /// "honor" means here. (No `stop_sequences` equivalent here, unlike
+    /// [`TextRequest`](crate::text::TextRequest): a stop string can truncate
+    /// otherwise-valid JSON output, which cuts against the whole point of a
+    /// structured request.)
+    pub seed: Option<u64>,
     /// Extra provider-specific fields to send alongside this request, for
     /// options this crate doesn't model as a typed field yet. Must be a JSON
     /// object to have any effect: each of its top-level keys is merged into
@@ -55,6 +62,7 @@ impl StructuredRequest {
             schema,
             cache_system_prompt: false,
             reasoning_effort: None,
+            seed: None,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -171,6 +179,13 @@ impl PendingStructuredRequest {
     /// models this applies to.
     pub fn with_reasoning_effort(mut self, effort: impl Into<String>) -> Self {
         self.request.reasoning_effort = Some(effort.into());
+        self
+    }
+
+    /// Sets a seed for providers whose backend can honor one. See
+    /// [`StructuredRequest::seed`] for what "honor" means here.
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.request.seed = Some(seed);
         self
     }
 

@@ -57,6 +57,7 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
         ),
         stream: None,
         thinking: request.thinking_budget.map(ThinkingConfig::enabled),
+        stop_sequences: request.stop_sequences.clone(),
     }
 }
 
@@ -106,6 +107,10 @@ pub fn build_structured_request(request: &StructuredRequest) -> MessagesRequest 
         // `thinking_budget` field on `StructuredRequest` at all, for the
         // same reason).
         thinking: None,
+        // `StructuredRequest` has no `stop_sequences` field either -- see
+        // its own doc comment for why (a stop string can truncate otherwise
+        // -valid JSON).
+        stop_sequences: Vec::new(),
     }
 }
 

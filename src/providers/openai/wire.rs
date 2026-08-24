@@ -47,6 +47,10 @@ pub struct ChatRequest {
     /// see [`TextRequest::provider_options`](crate::text::TextRequest::provider_options).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stop: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
