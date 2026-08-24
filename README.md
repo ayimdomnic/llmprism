@@ -43,20 +43,20 @@ thing -- tool calling works exactly the same way either way.
 
 ## Status
 
-This crate is early (`0.1.0`, pre-1.0) and the public API may still change, but
-every provider and capability in the original scope is implemented. Not every
+This crate is early (pre-1.0) and the public API may still change, but every
+provider and capability in the original scope is implemented. Not every
 provider supports every capability -- a provider's own API has to actually offer
 it -- so here's what works where:
 
-| Provider                                                     | Text + tools + streaming | Structured output | Moderation | Embeddings | Images | Audio |
-| -------------------------------------------------------------| :-----------------------: | :----------------: | :--------: | :--------: | :----: | :---: |
-| **OpenAI**                                                   | ✅                         | ✅                  | ✅          | ✅          | ✅      | ✅     |
-| **Anthropic**                                                | ✅                         | ✅                  |            |            |        |       |
-| **Gemini**                                                   | ✅                         | ✅                  |            | ✅          |        |       |
-| **Groq**, **DeepSeek**, **Mistral**, **xAI**, **OpenRouter**, **Perplexity**, **Z.ai** | ✅ |     |            |            |        |       |
-| **Ollama**                                                   | ✅                         |                     |            | ✅          |        |       |
-| **VoyageAI**                                                 |                            |                     |            | ✅          |        |       |
-| **ElevenLabs**                                                |                            |                     |            |            |        | ✅     |
+| Provider                                                     | Text + tools + streaming | Structured output | Moderation | Embeddings | Rerank | Images | Audio |
+| -------------------------------------------------------------| :-----------------------: | :----------------: | :--------: | :--------: | :----: | :----: | :---: |
+| **OpenAI**                                                   | ✅                         | ✅                  | ✅          | ✅          |        | ✅      | ✅     |
+| **Anthropic**                                                | ✅                         | ✅                  |            |            |        |        |       |
+| **Gemini**                                                   | ✅                         | ✅                  |            | ✅          |        |        |       |
+| **Groq**, **DeepSeek**, **Mistral**, **xAI**, **OpenRouter**, **Perplexity**, **Z.ai** | ✅ |     |            |            |        |        |       |
+| **Ollama**                                                   | ✅                         |                     |            | ✅          |        |        |       |
+| **VoyageAI**                                                 |                            |                     |            | ✅          | ✅      |        |       |
+| **ElevenLabs**                                                |                            |                     |            |            |        |        | ✅     |
 
 A few notes on the gaps:
 
@@ -73,9 +73,10 @@ A few notes on the gaps:
 - Ollama also reuses the OpenAI provider (plus embeddings), needs no API key
   by default, and -- unlike every other provider -- is registered by
   `Registry::from_env()` unconditionally rather than only when a key is set.
-- VoyageAI and ElevenLabs are single-capability specialists: VoyageAI does
-  only embeddings (frequently paired with Anthropic, which has none of its
-  own), and ElevenLabs does only text-to-speech and speech-to-text.
+- VoyageAI and ElevenLabs are retrieval/audio specialists: VoyageAI does
+  embeddings and reranking (frequently paired with Anthropic, which has
+  neither of its own), and ElevenLabs does only text-to-speech and
+  speech-to-text.
 
 ## Installing
 
@@ -98,8 +99,9 @@ the providers you actually use. Turn on everything with the `full` feature.
   In tests you register a `FakeProvider` under the same name instead -- no other
   code has to change.
 - Every capability -- **Text**, **structured output**, **moderation**,
-  **embeddings**, **images**, and **audio** (text-to-speech and
-  speech-to-text) -- follows the same shape: call a method on the registry to
+  **embeddings**, **reranking**, **images**, and **audio** (text-to-speech
+  and speech-to-text) -- follows the same shape: call a method on the
+  registry to
   get a fluent builder, chain `.with_*()` calls to describe the request, then
   run it -- `.generate()` (all at once) or `.stream()` (incrementally, as a
   `Stream` of events) for Text, `.generate()` for the others. Not every

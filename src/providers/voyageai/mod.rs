@@ -1,10 +1,11 @@
 //! The VoyageAI provider, talking to VoyageAI's Embeddings API
-//! (`api.voyageai.com/v1/embeddings`). VoyageAI is an embeddings-only
-//! service -- there's no chat/completions endpoint to speak of, so this is
-//! the one and only capability this provider implements. Enable with the
-//! `voyageai` Cargo feature.
+//! (`api.voyageai.com/v1/embeddings`) and Rerank API
+//! (`api.voyageai.com/v1/rerank`) -- there's no chat/completions endpoint to
+//! speak of, so these two retrieval-focused capabilities are the only ones
+//! this provider implements. Enable with the `voyageai` Cargo feature.
 
 mod embeddings;
+mod rerank;
 
 use async_trait::async_trait;
 use reqwest_middleware::ClientWithMiddleware;
@@ -13,6 +14,7 @@ use crate::client::{build_http_client, merge_provider_options, ErrorMapper};
 use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::provider::Provider;
+use crate::rerank::{RerankRequest, RerankResponse};
 
 const DEFAULT_BASE_URL: &str = "https://api.voyageai.com/v1";
 
@@ -104,5 +106,37 @@ impl Provider for VoyageAiProvider {
             })?;
 
         Ok(embeddings::parse_response(wire_response))
+    }
+
+    async fn rerank(&self, request: RerankRequest) -> Result<RerankResponse, Error> {
+        let wire_request = rerank::build_request(&request);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
+
+        let http_response = self
+            .client
+            .post(format!("{}/rerank", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        let headers = http_response.headers().clone();
+        let body_text = http_response.text().await?;
+
+        if !status.is_success() {
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let wire_response: rerank::ApiResponse =
+            serde_json::from_str(&body_text).map_err(|e| Error::Decode {
+                provider: self.name().to_string(),
+                message: e.to_string(),
+            })?;
+
+        Ok(rerank::parse_response(wire_response))
     }
 }

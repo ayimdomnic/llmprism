@@ -10,6 +10,7 @@ use crate::embeddings::{EmbeddingsRequest, EmbeddingsResponse};
 use crate::error::Error;
 use crate::images::{ImagesRequest, ImagesResponse};
 use crate::moderation::{ModerationRequest, ModerationResponse};
+use crate::rerank::{RerankRequest, RerankResponse};
 use crate::stream_event::StreamEvent;
 use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::{Step, TextRequest};
@@ -127,6 +128,13 @@ pub trait Provider: Send + Sync {
     async fn embeddings(&self, request: EmbeddingsRequest) -> Result<EmbeddingsResponse, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "embeddings"))
+    }
+
+    /// Scores and sorts a list of documents by relevance to a query. See
+    /// [`crate::rerank`] for how this differs from [`embeddings`](Self::embeddings).
+    async fn rerank(&self, request: RerankRequest) -> Result<RerankResponse, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "rerank"))
     }
 
     /// Generates one or more images from a text prompt.

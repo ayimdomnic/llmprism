@@ -6,6 +6,7 @@ use crate::audio::{AudioOutput, AudioResponse, TranscriptionResponse};
 use crate::embeddings::{Embedding, EmbeddingsResponse};
 use crate::images::{GeneratedImage, ImagesResponse};
 use crate::moderation::{ModerationResponse, ModerationResult};
+use crate::rerank::{RankedDocument, RerankResponse};
 use crate::structured::StructuredResponse;
 use crate::text::Step;
 use crate::value_objects::{EmbeddingsUsage, FinishReason, MediaData, Meta, ToolCall, Usage};
@@ -261,6 +262,70 @@ impl Default for FakeEmbeddingsResponse {
 
 impl From<FakeEmbeddingsResponse> for EmbeddingsResponse {
     fn from(fixture: FakeEmbeddingsResponse) -> Self {
+        fixture.build()
+    }
+}
+
+/// A fluent builder for a canned [`RerankResponse`], for scripting what a
+/// [`FakeProvider`](super::FakeProvider) should return from a rerank request
+/// in a test.
+///
+/// # Example
+///
+/// ```
+/// use llmprism::testing::FakeRerankResponse;
+///
+/// let response = FakeRerankResponse::new().with_result(0, 0.92).build();
+/// assert_eq!(response.results[0].relevance_score, 0.92);
+/// ```
+pub struct FakeRerankResponse {
+    response: RerankResponse,
+}
+
+impl FakeRerankResponse {
+    /// Starts a canned response with no scored documents yet.
+    pub fn new() -> Self {
+        Self {
+            response: RerankResponse {
+                results: Vec::new(),
+                usage: EmbeddingsUsage::default(),
+                meta: Meta::default(),
+            },
+        }
+    }
+
+    /// Appends one scored document, referencing the original `documents`
+    /// list by `index`. Call this once per document your test expects to be
+    /// scored.
+    pub fn with_result(mut self, index: usize, relevance_score: f32) -> Self {
+        self.response.results.push(RankedDocument {
+            index,
+            relevance_score,
+            document: None,
+        });
+        self
+    }
+
+    /// Overrides the token usage reported for this canned response.
+    pub fn with_usage(mut self, usage: EmbeddingsUsage) -> Self {
+        self.response.usage = usage;
+        self
+    }
+
+    /// Finishes building and returns the underlying [`RerankResponse`].
+    pub fn build(self) -> RerankResponse {
+        self.response
+    }
+}
+
+impl Default for FakeRerankResponse {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<FakeRerankResponse> for RerankResponse {
+    fn from(fixture: FakeRerankResponse) -> Self {
         fixture.build()
     }
 }

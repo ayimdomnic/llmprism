@@ -1,7 +1,7 @@
 //! Wire format and mapping for VoyageAI's Embeddings API
-//! (`POST /v1/embeddings`) -- the only endpoint this provider has, since
-//! VoyageAI is an embeddings specialist (frequently used alongside
-//! Anthropic, which has no embeddings endpoint of its own).
+//! (`POST /v1/embeddings`), one of this provider's two endpoints (the other
+//! being its Rerank API) -- frequently used alongside Anthropic, which has
+//! no embeddings endpoint of its own.
 
 use serde::{Deserialize, Serialize};
 

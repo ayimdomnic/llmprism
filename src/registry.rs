@@ -9,6 +9,7 @@ use crate::error::Error;
 use crate::images::PendingImagesRequest;
 use crate::moderation::PendingModerationRequest;
 use crate::provider::Provider;
+use crate::rerank::PendingRerankRequest;
 use crate::schema::ObjectSchema;
 use crate::structured::PendingStructuredRequest;
 use crate::text::PendingTextRequest;
@@ -220,6 +221,42 @@ impl Registry {
     ) -> Result<PendingEmbeddingsRequest, Error> {
         let provider = self.provider(provider_name)?;
         Ok(PendingEmbeddingsRequest::new(provider, model))
+    }
+
+    /// Starts a rerank request against the provider registered under
+    /// `provider_name`, targeting `model`, scoring documents against
+    /// `query`. Add one or more `.with_document(...)` calls on the returned
+    /// builder, then call `.generate()` to run it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnknownProvider`] if `provider_name` isn't
+    /// registered.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "voyageai")]
+    /// # async fn example() -> Result<(), llmprism::Error> {
+    /// use llmprism::Registry;
+    ///
+    /// let registry = Registry::from_env();
+    /// let response = registry
+    ///     .rerank("voyageai", "rerank-2.5", "What's the capital of France?")?
+    ///     .with_document("Paris is the capital of France.")
+    ///     .generate()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn rerank(
+        &self,
+        provider_name: &str,
+        model: impl Into<String>,
+        query: impl Into<String>,
+    ) -> Result<PendingRerankRequest, Error> {
+        let provider = self.provider(provider_name)?;
+        Ok(PendingRerankRequest::new(provider, model, query))
     }
 
     /// Starts an image-generation request against the provider registered

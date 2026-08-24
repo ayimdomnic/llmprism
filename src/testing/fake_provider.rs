@@ -11,6 +11,7 @@ use crate::error::Error;
 use crate::images::{ImagesRequest, ImagesResponse};
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
+use crate::rerank::{RerankRequest, RerankResponse};
 use crate::stream_event::StreamEvent;
 use crate::structured::{StructuredRequest, StructuredResponse};
 use crate::text::{Step, TextRequest};
@@ -68,6 +69,7 @@ pub struct FakeProvider {
     structured: ResponseQueue<StructuredRequest, StructuredResponse>,
     moderation: ResponseQueue<ModerationRequest, ModerationResponse>,
     embeddings: ResponseQueue<EmbeddingsRequest, EmbeddingsResponse>,
+    rerank: ResponseQueue<RerankRequest, RerankResponse>,
     images: ResponseQueue<ImagesRequest, ImagesResponse>,
     text_to_speech: ResponseQueue<TextToSpeechRequest, AudioResponse>,
     speech_to_text: ResponseQueue<SpeechToTextRequest, TranscriptionResponse>,
@@ -84,6 +86,7 @@ impl FakeProvider {
             structured: ResponseQueue::new(),
             moderation: ResponseQueue::new(),
             embeddings: ResponseQueue::new(),
+            rerank: ResponseQueue::new(),
             images: ResponseQueue::new(),
             text_to_speech: ResponseQueue::new(),
             speech_to_text: ResponseQueue::new(),
@@ -121,6 +124,13 @@ impl FakeProvider {
     /// this provider receives an embeddings request.
     pub fn respond_with_embeddings(self, response: impl Into<EmbeddingsResponse>) -> Self {
         self.embeddings.push(response.into());
+        self
+    }
+
+    /// Queues one canned rerank response, to be returned the next time this
+    /// provider receives a rerank request.
+    pub fn respond_with_rerank(self, response: impl Into<RerankResponse>) -> Self {
+        self.rerank.push(response.into());
         self
     }
 
@@ -178,6 +188,12 @@ impl FakeProvider {
     /// order.
     pub fn recorded_embeddings_requests(&self) -> Vec<EmbeddingsRequest> {
         self.embeddings.recorded()
+    }
+
+    /// Returns every rerank request this provider actually received, in
+    /// order.
+    pub fn recorded_rerank_requests(&self) -> Vec<RerankRequest> {
+        self.rerank.recorded()
     }
 
     /// Returns every images request this provider actually received, in
@@ -251,6 +267,12 @@ impl Provider for FakeProvider {
         Ok(self
             .embeddings
             .next(request, &self.name, "embeddings", "respond_with_embeddings"))
+    }
+
+    async fn rerank(&self, request: RerankRequest) -> Result<RerankResponse, Error> {
+        Ok(self
+            .rerank
+            .next(request, &self.name, "rerank", "respond_with_rerank"))
     }
 
     async fn images(&self, request: ImagesRequest) -> Result<ImagesResponse, Error> {
