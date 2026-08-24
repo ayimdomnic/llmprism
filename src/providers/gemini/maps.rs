@@ -293,9 +293,26 @@ pub fn parse_structured_response(
     response: GenerateContentResponse,
     provider_name: &str,
 ) -> Result<StructuredResponse, Error> {
+    let usage = response
+        .usage_metadata
+        .clone()
+        .map(map_usage)
+        .unwrap_or_default();
+    let meta = Meta {
+        id: response.response_id.clone(),
+        model: response.model_version.clone(),
+        rate_limits: Vec::new(),
+    };
+
     let candidate = first_candidate(&response).map_err(|message| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message,
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: String::new(),
+            finish_reason: FinishReason::ContentFilter,
+            usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     let finish_reason = map_finish_reason(candidate.finish_reason.as_deref());
@@ -304,22 +321,30 @@ pub fn parse_structured_response(
     let text = text.ok_or_else(|| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message: "response contained no text part with the structured output".to_string(),
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: String::new(),
+            finish_reason,
+            usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     let data: Value = serde_json::from_str(&text).map_err(|e| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message: e.to_string(),
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: text.clone(),
+            finish_reason,
+            usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     Ok(StructuredResponse {
         data,
         finish_reason,
-        usage: response.usage_metadata.map(map_usage).unwrap_or_default(),
-        meta: Meta {
-            id: response.response_id,
-            model: response.model_version,
-            rate_limits: Vec::new(),
-        },
+        usage,
+        meta,
     })
 }
 

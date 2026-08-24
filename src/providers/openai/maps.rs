@@ -289,28 +289,44 @@ pub fn parse_structured_response(
         });
     }
 
+    let finish_reason = map_finish_reason(&choice.finish_reason);
+    let response_usage = usage.map(map_usage).unwrap_or_default();
+    let meta = Meta {
+        id: Some(id),
+        model: Some(model),
+        rate_limits: Vec::new(),
+    };
+
     let content = choice
         .message
         .content
         .ok_or_else(|| Error::StructuredDecode {
             provider: provider_name.to_string(),
             message: "response contained no content".to_string(),
+            context: Box::new(crate::error::StructuredDecodeContext {
+                raw: String::new(),
+                finish_reason,
+                usage: response_usage,
+                meta: meta.clone(),
+            }),
         })?;
 
     let data = serde_json::from_str(&content).map_err(|e| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message: e.to_string(),
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: content.clone(),
+            finish_reason,
+            usage: response_usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     Ok(StructuredResponse {
         data,
-        finish_reason: map_finish_reason(&choice.finish_reason),
-        usage: usage.map(map_usage).unwrap_or_default(),
-        meta: Meta {
-            id: Some(id),
-            model: Some(model),
-            rate_limits: Vec::new(),
-        },
+        finish_reason,
+        usage: response_usage,
+        meta,
     })
 }
 

@@ -186,7 +186,7 @@ pub struct Candidate {
     pub finish_reason: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageMetadata {
     #[serde(default)]

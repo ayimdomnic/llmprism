@@ -5,6 +5,7 @@ use crate::provider::Provider;
 use crate::schema::ObjectSchema;
 use crate::value_objects::{Message, UserMessage};
 
+use super::repair::RepairStrategy;
 use super::response::StructuredResponse;
 
 /// The immutable, provider-agnostic shape of one structured-output call. You'll
@@ -41,6 +42,11 @@ pub struct StructuredRequest {
     /// otherwise-valid JSON output, which cuts against the whole point of a
     /// structured request.)
     pub seed: Option<u64>,
+    /// A hook that gets one chance to salvage a reply that failed to decode,
+    /// instead of the request just failing. `None` (the default) means a
+    /// decode failure always returns [`Error::StructuredDecode`] as-is. See
+    /// [`RepairStrategy`] and [`with_repair`](PendingStructuredRequest::with_repair).
+    pub repair: Option<Arc<dyn RepairStrategy>>,
     /// Extra provider-specific fields to send alongside this request, for
     /// options this crate doesn't model as a typed field yet. Must be a JSON
     /// object to have any effect: each of its top-level keys is merged into
@@ -63,6 +69,7 @@ impl StructuredRequest {
             cache_system_prompt: false,
             reasoning_effort: None,
             seed: None,
+            repair: None,
             provider_options: serde_json::Value::Null,
         }
     }
@@ -189,6 +196,14 @@ impl PendingStructuredRequest {
         self
     }
 
+    /// Attaches a hook that gets one chance to salvage a reply that fails to
+    /// decode, instead of [`generate`](Self::generate) returning
+    /// [`Error::StructuredDecode`] outright. See [`RepairStrategy`].
+    pub fn with_repair(mut self, repair: impl RepairStrategy + 'static) -> Self {
+        self.request.repair = Some(Arc::new(repair));
+        self
+    }
+
     /// Freezes the builder's current state into a [`StructuredRequest`] without
     /// sending it.
     pub fn to_request(&self) -> StructuredRequest {
@@ -197,7 +212,34 @@ impl PendingStructuredRequest {
 
     /// Sends the request and returns the model's reply, parsed as JSON matching
     /// the schema you provided.
+    ///
+    /// If the reply fails to decode and [`with_repair`](Self::with_repair)
+    /// attached a [`RepairStrategy`], that hook gets one chance to salvage a
+    /// result before this returns [`Error::StructuredDecode`].
     pub async fn generate(self) -> Result<StructuredResponse, Error> {
-        self.provider.structured(self.request).await
+        let repair = self.request.repair.clone();
+
+        let error = match self.provider.structured(self.request).await {
+            Ok(response) => return Ok(response),
+            Err(error) => error,
+        };
+
+        let Some(repair) = repair else {
+            return Err(error);
+        };
+
+        let Error::StructuredDecode { context, .. } = &error else {
+            return Err(error);
+        };
+
+        match repair.repair(&context.raw, &error).await {
+            Some(data) => Ok(StructuredResponse {
+                data,
+                finish_reason: context.finish_reason,
+                usage: context.usage,
+                meta: context.meta.clone(),
+            }),
+            None => Err(error),
+        }
     }
 }
