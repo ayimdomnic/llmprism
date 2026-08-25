@@ -10,9 +10,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ## [Unreleased]
 
 Borrowed from a comparison against Vercel's AI SDK, scoped to what matters
-for server-side Rust applications.
+for server-side Rust applications. Also adds benchmark coverage, unrelated to
+that comparison.
 
 ### Added
+
+- `criterion` benchmarks (`cargo bench --features full`) for the crate's own
+  hot paths -- schema-to-JSON-Schema conversion, the tool-calling loop's
+  bookkeeping, `Registry::wrap` middleware dispatch overhead, and the
+  `provider_options` merge -- isolated from real provider network latency via
+  `FakeProvider`, so they measure code this crate actually owns.
 
 - **`ProviderMiddleware`** and `Registry::wrap`: wrap a registered provider to
   intercept its calls from outside its own implementation -- transform a

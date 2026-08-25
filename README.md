@@ -181,6 +181,7 @@ cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 cargo build --examples --features full
+cargo bench --features full                 # benchmarks the crate's own code, not network calls
 ```
 
 Every provider has its own live smoke test under `tests/` (`openai_text.rs`,
