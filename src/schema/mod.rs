@@ -95,6 +95,10 @@ pub fn to_json_schema(schema: &Schema) -> Value {
             value["items"] = to_json_schema(&s.items);
             value
         }
+        Schema::Object(s) if s.json_schema.is_some() => s
+            .json_schema
+            .clone()
+            .expect("just checked is_some via the match guard"),
         Schema::Object(s) => {
             let mut properties = serde_json::Map::new();
             for prop in &s.properties {
@@ -128,4 +132,28 @@ fn with_description(mut value: Value, description: Option<&str>) -> Value {
         value["description"] = json!(description);
     }
     value
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_json_schema_returns_a_raw_object_schema_unchanged() {
+        let raw = json!({
+            "type": "object",
+            "properties": {"anything": {"type": "string", "const": "not a Schema variant"}},
+            "oneOf": [{"required": ["a"]}, {"required": ["b"]}],
+        });
+        let schema = Schema::Object(ObjectSchema::from_raw_json_schema("weird", raw.clone()));
+
+        assert_eq!(to_json_schema(&schema), raw);
+    }
+
+    #[test]
+    fn from_raw_json_schema_still_sets_the_ordinary_name_field() {
+        let schema = ObjectSchema::from_raw_json_schema("my_tool", json!({"type": "object"}));
+
+        assert_eq!(schema.name, "my_tool");
+    }
 }
