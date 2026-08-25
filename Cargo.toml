@@ -102,6 +102,10 @@ name = "tool_loop"
 harness = false
 
 [[bench]]
+name = "stream_loop"
+harness = false
+
+[[bench]]
 name = "middleware"
 harness = false
 

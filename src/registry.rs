@@ -93,7 +93,7 @@ impl Registry {
     /// impl ProviderMiddleware for AddSystemPrompt {
     ///     async fn text_step(&self, mut request: TextRequest, next: &dyn Provider) -> Result<Step, Error> {
     ///         request.system_prompts.insert(0, self.0.to_string());
-    ///         next.text_step(request).await
+    ///         next.text_step(&request).await
     ///     }
     /// }
     ///

@@ -22,7 +22,7 @@ impl ProviderMiddleware for AddSystemPrompt {
         next: &dyn Provider,
     ) -> Result<Step, Error> {
         request.system_prompts.insert(0, self.0.to_string());
-        next.text_step(request).await
+        next.text_step(&request).await
     }
 }
 
@@ -68,7 +68,7 @@ impl ProviderMiddleware for CountCallsAndCacheFirstResult {
         }
 
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let step = next.text_step(request).await?;
+        let step = next.text_step(&request).await?;
         *self.cached.lock().unwrap() = Some(step.clone());
         Ok(step)
     }

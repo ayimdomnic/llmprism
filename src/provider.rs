@@ -47,7 +47,7 @@ use crate::text::{Step, TextRequest};
 /// impl Provider for MyProvider {
 ///     fn name(&self) -> &str { "my-provider" }
 ///
-///     async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
+///     async fn text_step(&self, request: &TextRequest) -> Result<Step, Error> {
 ///         // Translate `request` into your backend's wire format, send it, and
 ///         // translate the response back into a `Step`.
 ///         # unimplemented!()
@@ -72,7 +72,14 @@ pub trait Provider: Send + Sync {
     /// [`PendingTextRequest::generate`](crate::text::PendingTextRequest::generate)
     /// calls under the hood -- so implementing this one method is enough to get
     /// full tool-calling support for free.
-    async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
+    ///
+    /// Takes `request` by reference, not by value: `run_text` calls this once per
+    /// round trip against a conversation that keeps growing (each round trip
+    /// appends the model's tool calls and their results as new messages), so
+    /// taking ownership here would force cloning the entire, ever-larger request
+    /// on every single round trip. A `Provider` only ever needs to read `request`
+    /// to build its wire-format body, never to consume it.
+    async fn text_step(&self, request: &TextRequest) -> Result<Step, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "text"))
     }
@@ -86,7 +93,8 @@ pub trait Provider: Send + Sync {
     /// [`crate::stream_loop::stream_text`] (what
     /// [`PendingTextRequest::stream`](crate::text::PendingTextRequest::stream)
     /// calls), the same way [`crate::tool_loop::run_text`] centralizes it for the
-    /// non-streaming case.
+    /// non-streaming case. Takes `request` by reference for the same reason
+    /// [`text_step`](Self::text_step) does.
     ///
     /// The outer `Result` is for failures that happen before any events can be
     /// produced at all (e.g. the initial HTTP request itself failing); once the
@@ -94,7 +102,7 @@ pub trait Provider: Send + Sync {
     /// failure doesn't need to abort the whole method call before it starts.
     async fn stream_text_once(
         &self,
-        request: TextRequest,
+        request: &TextRequest,
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "stream_text"))

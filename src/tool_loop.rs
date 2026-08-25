@@ -88,7 +88,7 @@ pub async fn run_text(
     let mut steps: Vec<Step> = Vec::new();
 
     loop {
-        let step = provider.text_step(request.clone()).await?;
+        let step = provider.text_step(&request).await?;
         let has_tool_calls =
             step.finish_reason == FinishReason::ToolCalls && !step.tool_calls.is_empty();
         let tool_calls = step.tool_calls.clone();

@@ -47,7 +47,7 @@ pub fn stream_text(
         let mut steps: Vec<Step> = Vec::new();
 
         loop {
-            let mut inner = provider.stream_text_once(request.clone()).await?;
+            let mut inner = provider.stream_text_once(&request).await?;
 
             let mut text = String::new();
             let mut tool_calls: Vec<ToolCall> = Vec::new();

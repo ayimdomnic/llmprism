@@ -221,15 +221,19 @@ impl Provider for FakeProvider {
         &self.name
     }
 
-    async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
-        Ok(self.text.next(request, &self.name, "text", "respond_with"))
+    async fn text_step(&self, request: &TextRequest) -> Result<Step, Error> {
+        Ok(self
+            .text
+            .next(request.clone(), &self.name, "text", "respond_with"))
     }
 
     async fn stream_text_once(
         &self,
-        request: TextRequest,
+        request: &TextRequest,
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
-        let step = self.text.next(request, &self.name, "text", "respond_with");
+        let step = self
+            .text
+            .next(request.clone(), &self.name, "text", "respond_with");
 
         let mut events = vec![StreamEvent::StreamStart {
             meta: step.meta.clone(),

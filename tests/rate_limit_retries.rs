@@ -60,7 +60,7 @@ async fn a_429_is_retried_and_eventually_succeeds() {
         .with_client(build_http_client_with_max_retries(5));
 
     let step = provider
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await
         .expect("should succeed after retrying past the two 429 responses");
 
@@ -89,7 +89,7 @@ async fn the_default_client_retries_a_429_before_giving_up() {
 
     let provider = OpenAiProvider::with_base_url("sk-test", mock_server.uri());
 
-    let result = provider.text_step(TextRequest::new("gpt-4o-mini")).await;
+    let result = provider.text_step(&TextRequest::new("gpt-4o-mini")).await;
 
     assert!(matches!(result, Err(llmprism::Error::RateLimited { .. })));
     mock_server.verify().await;
@@ -109,7 +109,7 @@ async fn zero_max_retries_surfaces_a_429_on_the_first_attempt() {
     let provider = OpenAiProvider::with_base_url("sk-test", mock_server.uri())
         .with_client(build_http_client_with_max_retries(0));
 
-    let result = provider.text_step(TextRequest::new("gpt-4o-mini")).await;
+    let result = provider.text_step(&TextRequest::new("gpt-4o-mini")).await;
 
     assert!(matches!(result, Err(llmprism::Error::RateLimited { .. })));
     mock_server.verify().await;

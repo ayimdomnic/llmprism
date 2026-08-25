@@ -49,7 +49,7 @@ use crate::text::{Step, TextRequest};
 /// impl ProviderMiddleware for LogTiming {
 ///     async fn text_step(&self, request: TextRequest, next: &dyn Provider) -> Result<Step, Error> {
 ///         let started = Instant::now();
-///         let result = next.text_step(request).await;
+///         let result = next.text_step(&request).await;
 ///         println!("text_step took {:?}", started.elapsed());
 ///         result
 ///     }
@@ -57,9 +57,14 @@ use crate::text::{Step, TextRequest};
 /// ```
 #[async_trait]
 pub trait ProviderMiddleware: Send + Sync {
-    /// Intercepts [`Provider::text_step`].
+    /// Intercepts [`Provider::text_step`]. Takes `request` by value, unlike
+    /// [`Provider::text_step`] itself -- a middleware commonly wants to mutate
+    /// it before forwarding (add a header-equivalent field, inject a system
+    /// prompt), which is far more ergonomic against an owned value. The one
+    /// extra clone this costs happens only for a middleware-wrapped provider,
+    /// not on the default, unwrapped path every other provider call takes.
     async fn text_step(&self, request: TextRequest, next: &dyn Provider) -> Result<Step, Error> {
-        next.text_step(request).await
+        next.text_step(&request).await
     }
 
     /// Intercepts [`Provider::stream_text_once`]. The `Result` this returns
@@ -71,7 +76,7 @@ pub trait ProviderMiddleware: Send + Sync {
         request: TextRequest,
         next: &dyn Provider,
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
-        next.stream_text_once(request).await
+        next.stream_text_once(&request).await
     }
 
     /// Intercepts [`Provider::structured`].
@@ -163,18 +168,18 @@ impl Provider for MiddlewareProvider {
         self.inner.name()
     }
 
-    async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
+    async fn text_step(&self, request: &TextRequest) -> Result<Step, Error> {
         self.middleware
-            .text_step(request, self.inner.as_ref())
+            .text_step(request.clone(), self.inner.as_ref())
             .await
     }
 
     async fn stream_text_once(
         &self,
-        request: TextRequest,
+        request: &TextRequest,
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
         self.middleware
-            .stream_text_once(request, self.inner.as_ref())
+            .stream_text_once(request.clone(), self.inner.as_ref())
             .await
     }
 
