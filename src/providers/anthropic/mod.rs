@@ -79,8 +79,8 @@ impl Provider for AnthropicProvider {
         "anthropic"
     }
 
-    async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
-        let wire_request = maps::build_request(&request);
+    async fn text_step(&self, request: &TextRequest) -> Result<Step, Error> {
+        let wire_request = maps::build_request(request);
         let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
@@ -114,9 +114,9 @@ impl Provider for AnthropicProvider {
 
     async fn stream_text_once(
         &self,
-        request: TextRequest,
+        request: &TextRequest,
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
-        let mut wire_request = maps::build_request(&request);
+        let mut wire_request = maps::build_request(request);
         wire_request.stream = Some(true);
         let body = merge_provider_options(&wire_request, &request.provider_options)?;
 

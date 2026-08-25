@@ -47,6 +47,7 @@ pub fn build_request(request: &TextRequest) -> GenerateContentRequest {
             top_p: request.top_p,
             response_mime_type: None,
             response_json_schema: None,
+            stop_sequences: request.stop_sequences.clone(),
         }),
         tools: build_tools(&request.tools, &request.provider_tools),
         tool_config: to_wire_tool_config(
@@ -75,6 +76,9 @@ pub fn build_structured_request(request: &StructuredRequest) -> GenerateContentR
             top_p: request.top_p,
             response_mime_type: Some("application/json".to_string()),
             response_json_schema: Some(to_json_schema(&Schema::Object(request.schema.clone()))),
+            // `StructuredRequest` has no `stop_sequences` field -- see its
+            // own doc comment for why.
+            stop_sequences: Vec::new(),
         }),
         tools: Vec::new(),
         tool_config: None,
@@ -289,9 +293,26 @@ pub fn parse_structured_response(
     response: GenerateContentResponse,
     provider_name: &str,
 ) -> Result<StructuredResponse, Error> {
+    let usage = response
+        .usage_metadata
+        .clone()
+        .map(map_usage)
+        .unwrap_or_default();
+    let meta = Meta {
+        id: response.response_id.clone(),
+        model: response.model_version.clone(),
+        rate_limits: Vec::new(),
+    };
+
     let candidate = first_candidate(&response).map_err(|message| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message,
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: String::new(),
+            finish_reason: FinishReason::ContentFilter,
+            usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     let finish_reason = map_finish_reason(candidate.finish_reason.as_deref());
@@ -300,22 +321,30 @@ pub fn parse_structured_response(
     let text = text.ok_or_else(|| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message: "response contained no text part with the structured output".to_string(),
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: String::new(),
+            finish_reason,
+            usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     let data: Value = serde_json::from_str(&text).map_err(|e| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message: e.to_string(),
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: text.clone(),
+            finish_reason,
+            usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     Ok(StructuredResponse {
         data,
         finish_reason,
-        usage: response.usage_metadata.map(map_usage).unwrap_or_default(),
-        meta: Meta {
-            id: response.response_id,
-            model: response.model_version,
-            rate_limits: Vec::new(),
-        },
+        usage,
+        meta,
     })
 }
 
@@ -465,5 +494,18 @@ mod tests {
         let wire_request = build_request(&request);
 
         assert!(wire_request.tool_config.is_some());
+    }
+
+    #[test]
+    fn build_request_passes_stop_sequences_through() {
+        let mut request = TextRequest::new("gemini-2.5-flash");
+        request.stop_sequences = vec!["STOP".to_string()];
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(
+            wire_request.generation_config.unwrap().stop_sequences,
+            vec!["STOP"]
+        );
     }
 }

@@ -47,7 +47,7 @@ pub fn stream_text(
         let mut steps: Vec<Step> = Vec::new();
 
         loop {
-            let mut inner = provider.stream_text_once(request.clone()).await?;
+            let mut inner = provider.stream_text_once(&request).await?;
 
             let mut text = String::new();
             let mut tool_calls: Vec<ToolCall> = Vec::new();
@@ -91,7 +91,12 @@ pub fn stream_text(
                 meta,
             });
 
-            if !has_tool_calls || steps.len() as u32 >= request.max_steps {
+            let stop_condition_met = request
+                .stop_when
+                .iter()
+                .any(|condition| condition.should_stop(&steps));
+
+            if !has_tool_calls || steps.len() as u32 >= request.max_steps || stop_condition_met {
                 yield StreamEvent::StreamEnd {
                     response: TextResponse::from_steps(steps),
                 };

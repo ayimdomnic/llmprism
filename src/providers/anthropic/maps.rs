@@ -57,6 +57,7 @@ pub fn build_request(request: &TextRequest) -> MessagesRequest {
         ),
         stream: None,
         thinking: request.thinking_budget.map(ThinkingConfig::enabled),
+        stop_sequences: request.stop_sequences.clone(),
     }
 }
 
@@ -106,6 +107,10 @@ pub fn build_structured_request(request: &StructuredRequest) -> MessagesRequest 
         // `thinking_budget` field on `StructuredRequest` at all, for the
         // same reason).
         thinking: None,
+        // `StructuredRequest` has no `stop_sequences` field either -- see
+        // its own doc comment for why (a stop string can truncate otherwise
+        // -valid JSON).
+        stop_sequences: Vec::new(),
     }
 }
 
@@ -310,17 +315,10 @@ pub fn parse_structured_response(
     response: MessagesResponse,
     provider_name: &str,
 ) -> Result<StructuredResponse, Error> {
-    let data = response
-        .content
-        .iter()
-        .find_map(|block| match block {
-            ContentBlock::ToolUse { input, .. } => Some(input.clone()),
-            _ => None,
-        })
-        .ok_or_else(|| Error::StructuredDecode {
-            provider: provider_name.to_string(),
-            message: "response contained no tool_use block with the structured output".to_string(),
-        })?;
+    let tool_use = response.content.iter().find_map(|block| match block {
+        ContentBlock::ToolUse { input, .. } => Some(input.clone()),
+        _ => None,
+    });
 
     // `tool_use` is the success case here -- the model complied with the
     // forced call -- so it's reported as a normal `Stop`, not `ToolCalls`;
@@ -331,16 +329,46 @@ pub fn parse_structured_response(
         Some("tool_use") => FinishReason::Stop,
         other => map_finish_reason(other),
     };
+    let usage = map_usage(response.usage);
+    let meta = Meta {
+        id: Some(response.id),
+        model: Some(response.model),
+        rate_limits: Vec::new(),
+    };
+
+    let data = tool_use.ok_or_else(|| {
+        // The model didn't call the forced tool at all -- most likely it
+        // replied with plain text instead (a refusal, or an explanation of
+        // why it couldn't comply). That text, when present, is exactly what
+        // a `RepairStrategy` needs to work with, so it's worth surfacing as
+        // `raw` even though this isn't the "malformed JSON" case OpenAI's
+        // equivalent handles.
+        let raw = response
+            .content
+            .iter()
+            .find_map(|block| match block {
+                ContentBlock::Text { text } => Some(text.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        Error::StructuredDecode {
+            provider: provider_name.to_string(),
+            message: "response contained no tool_use block with the structured output".to_string(),
+            context: Box::new(crate::error::StructuredDecodeContext {
+                raw,
+                finish_reason,
+                usage,
+                meta: meta.clone(),
+            }),
+        }
+    })?;
 
     Ok(StructuredResponse {
         data,
         finish_reason,
-        usage: map_usage(response.usage),
-        meta: Meta {
-            id: Some(response.id),
-            model: Some(response.model),
-            rate_limits: Vec::new(),
-        },
+        usage,
+        meta,
     })
 }
 
@@ -556,5 +584,15 @@ mod tests {
         let wire_request = build_request(&request);
 
         assert!(wire_request.tool_choice.is_some());
+    }
+
+    #[test]
+    fn build_request_passes_stop_sequences_through() {
+        let mut request = TextRequest::new("claude-3-5-haiku-20241022");
+        request.stop_sequences = vec!["STOP".to_string()];
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(wire_request.stop_sequences, vec!["STOP"]);
     }
 }

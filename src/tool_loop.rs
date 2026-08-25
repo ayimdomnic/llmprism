@@ -19,6 +19,46 @@ use crate::value_objects::{
     AssistantMessage, FinishReason, Message, ToolCall, ToolOutcome, ToolResult, ToolResultMessage,
 };
 
+/// A condition, checked after every round trip alongside `max_steps`, that
+/// can end [`run_text`] early.
+///
+/// Attach one or more with
+/// [`PendingTextRequest::with_stop_when`](crate::text::PendingTextRequest::with_stop_when).
+/// The loop stops as soon as *any* attached condition (or `max_steps`, or the
+/// model simply not asking for another tool call) says to -- useful for
+/// things `max_steps` alone can't express, like stopping once a specific
+/// tool has been called, or once a cumulative token budget is spent.
+///
+/// ```
+/// use llmprism::text::Step;
+/// use llmprism::tool_loop::StopCondition;
+///
+/// struct ToolWasCalled(&'static str);
+///
+/// impl StopCondition for ToolWasCalled {
+///     fn should_stop(&self, steps: &[Step]) -> bool {
+///         steps
+///             .last()
+///             .is_some_and(|step| step.tool_calls.iter().any(|call| call.name == self.0))
+///     }
+/// }
+/// ```
+pub trait StopCondition: Send + Sync {
+    /// `steps` is every round trip so far, oldest first, including the one
+    /// that was just produced -- return `true` to stop before running any
+    /// tool calls that step asked for.
+    fn should_stop(&self, steps: &[Step]) -> bool;
+}
+
+impl<F> StopCondition for F
+where
+    F: Fn(&[Step]) -> bool + Send + Sync,
+{
+    fn should_stop(&self, steps: &[Step]) -> bool {
+        self(steps)
+    }
+}
+
 /// Drives a text request to completion, looping through tool calls as needed.
 ///
 /// In plain terms, this does the following, repeatedly:
@@ -32,8 +72,9 @@ use crate::value_objects::{
 ///    the tools' results to the conversation as new messages, and go back to
 ///    step 1.
 ///
-/// The loop also stops once `request.max_steps` round trips have happened, even
-/// if the model is still asking for more tool calls -- this is a safety valve
+/// The loop also stops once `request.max_steps` round trips have happened, or
+/// once any of `request.stop_when`'s [`StopCondition`]s says to, even if the
+/// model is still asking for more tool calls -- both are a safety valve
 /// against a model (or a misbehaving tool) looping forever.
 ///
 /// This is what
@@ -47,7 +88,7 @@ pub async fn run_text(
     let mut steps: Vec<Step> = Vec::new();
 
     loop {
-        let step = provider.text_step(request.clone()).await?;
+        let step = provider.text_step(&request).await?;
         let has_tool_calls =
             step.finish_reason == FinishReason::ToolCalls && !step.tool_calls.is_empty();
         let tool_calls = step.tool_calls.clone();
@@ -55,7 +96,12 @@ pub async fn run_text(
 
         steps.push(step);
 
-        if !has_tool_calls || steps.len() as u32 >= request.max_steps {
+        let stop_condition_met = request
+            .stop_when
+            .iter()
+            .any(|condition| condition.should_stop(&steps));
+
+        if !has_tool_calls || steps.len() as u32 >= request.max_steps || stop_condition_met {
             return Ok(TextResponse::from_steps(steps));
         }
 

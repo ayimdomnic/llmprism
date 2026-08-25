@@ -100,13 +100,13 @@ macro_rules! openai_compatible_provider {
                 $name
             }
 
-            async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
+            async fn text_step(&self, request: &TextRequest) -> Result<Step, Error> {
                 self.inner.text_step(request).await
             }
 
             async fn stream_text_once(
                 &self,
-                request: TextRequest,
+                request: &TextRequest,
             ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
                 self.inner.stream_text_once(request).await
             }

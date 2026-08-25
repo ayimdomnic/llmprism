@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::Schema;
 
@@ -37,6 +38,22 @@ pub struct ObjectSchema {
     /// `properties`. Defaults to `false` -- most providers expect a closed set of
     /// fields.
     pub allow_additional_properties: bool,
+    /// An already-formed JSON Schema document to send exactly as-is, bypassing
+    /// `properties`/`required`/`allow_additional_properties` entirely. `None`
+    /// (the default) builds the schema from those fields normally, the same
+    /// way it always has.
+    ///
+    /// This is [`RawSchema`](super::RawSchema)'s escape hatch, made available
+    /// here too: `RawSchema` works anywhere a general [`Schema`] fits, but
+    /// [`Tool::parameters`](crate::Tool::parameters) and
+    /// [`StructuredRequest::schema`](crate::structured::StructuredRequest::schema)
+    /// are both typed as `ObjectSchema` specifically, so `Schema::Raw` can't be
+    /// plugged in at either point. Set via
+    /// [`from_raw_json_schema`](Self::from_raw_json_schema) instead of directly,
+    /// for a schema you already have in hand -- from an MCP server's tool
+    /// listing, or a user-supplied schema file -- rather than one you're
+    /// building field by field.
+    pub json_schema: Option<Value>,
 }
 
 impl ObjectSchema {
@@ -49,6 +66,26 @@ impl ObjectSchema {
             properties: Vec::new(),
             required: Vec::new(),
             allow_additional_properties: false,
+            json_schema: None,
+        }
+    }
+
+    /// Creates an object schema named `name` that sends `json_schema` exactly
+    /// as-is, instead of being built from [`with_property`](Self::with_property)
+    /// calls. See [`json_schema`](Self::json_schema) for when this is worth
+    /// reaching for.
+    ///
+    /// One caveat worth knowing if you're targeting OpenAI: its
+    /// structured-output request sets `"strict": true`, which requires
+    /// `additionalProperties: false` and every property listed in `required`,
+    /// recursively, throughout the whole schema. A raw schema that doesn't
+    /// already satisfy that shape will be rejected by OpenAI at request time --
+    /// this crate can't fix that up for you, since it sends `json_schema`
+    /// unmodified by design.
+    pub fn from_raw_json_schema(name: impl Into<String>, json_schema: Value) -> Self {
+        Self {
+            json_schema: Some(json_schema),
+            ..Self::new(name)
         }
     }
 

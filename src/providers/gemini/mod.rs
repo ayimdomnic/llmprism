@@ -92,9 +92,9 @@ impl Provider for GeminiProvider {
         "gemini"
     }
 
-    async fn text_step(&self, request: TextRequest) -> Result<Step, Error> {
+    async fn text_step(&self, request: &TextRequest) -> Result<Step, Error> {
         let model = request.model.clone();
-        let wire_request = maps::build_request(&request);
+        let wire_request = maps::build_request(request);
         let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self
@@ -127,10 +127,10 @@ impl Provider for GeminiProvider {
 
     async fn stream_text_once(
         &self,
-        request: TextRequest,
+        request: &TextRequest,
     ) -> Result<BoxStream<'static, Result<StreamEvent, Error>>, Error> {
         let model = request.model.clone();
-        let wire_request = maps::build_request(&request);
+        let wire_request = maps::build_request(request);
         let body = merge_provider_options(&wire_request, &request.provider_options)?;
 
         let http_response = self

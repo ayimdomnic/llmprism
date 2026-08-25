@@ -71,8 +71,22 @@ pub enum Error {
 
     /// The provider's structured-output response didn't match the schema you
     /// asked for (see [`Registry::structured`](crate::Registry::structured)).
+    ///
+    /// `context` carries everything needed to retry with a fixed-up reply
+    /// instead of just failing -- consumed by
+    /// [`RepairStrategy`](crate::structured::RepairStrategy), the hook that
+    /// lets you salvage a malformed reply instead of erroring out. See
+    /// [`StructuredDecodeContext`] for what it holds, and
+    /// [`PendingStructuredRequest::with_repair`](crate::structured::PendingStructuredRequest::with_repair)
+    /// for how to attach one. Boxed to keep this variant from inflating the
+    /// size of every `Result<_, Error>` in the crate, most of which never
+    /// construct it.
     #[error("failed to decode structured output from {provider}: {message}")]
-    StructuredDecode { provider: String, message: String },
+    StructuredDecode {
+        provider: String,
+        message: String,
+        context: Box<StructuredDecodeContext>,
+    },
 
     /// The provider's response body couldn't be parsed as the JSON shape this
     /// crate expected. This usually means the provider changed its API, or you're
@@ -136,6 +150,28 @@ pub enum Error {
     #[cfg(feature = "http")]
     #[error("http middleware error: {0}")]
     Middleware(#[from] reqwest_middleware::Error),
+}
+
+/// What [`Error::StructuredDecode`] carries about the response that failed to
+/// decode -- everything a [`RepairStrategy`](crate::structured::RepairStrategy)
+/// needs to try salvaging it, or that a successfully-repaired
+/// [`StructuredResponse`](crate::structured::StructuredResponse) needs to be
+/// complete.
+#[derive(Debug, Clone)]
+pub struct StructuredDecodeContext {
+    /// The exact text the provider sent that didn't decode -- whatever
+    /// didn't parse as JSON, or empty if the provider sent no relevant
+    /// content at all (see each provider's `parse_structured_response` for
+    /// when that happens).
+    pub raw: String,
+    /// What the response's finish reason would have been, had decoding
+    /// succeeded.
+    pub finish_reason: crate::value_objects::FinishReason,
+    /// What the response's token usage would have been, had decoding
+    /// succeeded.
+    pub usage: crate::value_objects::Usage,
+    /// What the response's metadata would have been, had decoding succeeded.
+    pub meta: crate::value_objects::Meta,
 }
 
 impl Error {

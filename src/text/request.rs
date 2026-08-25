@@ -9,6 +9,7 @@ use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
 use crate::tool::Tool;
+use crate::tool_loop::StopCondition;
 use crate::value_objects::{Message, UserMessage};
 
 use super::response::TextResponse;
@@ -65,12 +66,30 @@ pub struct TextRequest {
     /// Nucleus-sampling cutoff. `None` leaves this up to the provider's own
     /// default.
     pub top_p: Option<f32>,
+    /// Strings that stop generation the moment the model produces one of
+    /// them (the stop string itself isn't included in the reply). Supported
+    /// by OpenAI (`stop`), Anthropic (`stop_sequences`), and Gemini
+    /// (`stopSequences`); ignored elsewhere. `None`/empty leaves this up to
+    /// the provider's own default (usually "no extra stop strings").
+    pub stop_sequences: Vec<String>,
+    /// A seed for providers whose backend can honor one (OpenAI's `seed`;
+    /// most other providers have no equivalent and ignore this). Requesting
+    /// a seed makes output *more* reproducible across identical requests,
+    /// not guaranteed-deterministic -- treat it as a best-effort hint, the
+    /// same way the provider itself does. `None` leaves this up to the
+    /// provider's own default (unseeded).
+    pub seed: Option<u64>,
     /// The maximum number of request/response round trips the tool-calling loop
     /// will run before stopping, even if the model keeps asking for more tool
     /// calls. Defaults to `1` (a single round trip, i.e. no tool-calling loop) via
     /// [`TextRequest::new`] -- raise it with
     /// [`PendingTextRequest::with_max_steps`] if you're attaching tools.
     pub max_steps: u32,
+    /// Extra conditions, checked after every round trip alongside
+    /// `max_steps`, that can end the tool-calling loop early. Empty by
+    /// default. See [`StopCondition`] and
+    /// [`with_stop_when`](PendingTextRequest::with_stop_when).
+    pub stop_when: Vec<Arc<dyn StopCondition>>,
     /// Tools the model is allowed to call during this request. See [`Tool`].
     pub tools: Vec<Arc<dyn Tool>>,
     /// Provider-native tools -- built-in, server-side capabilities like web
@@ -138,7 +157,10 @@ impl TextRequest {
             max_tokens: None,
             temperature: None,
             top_p: None,
+            stop_sequences: Vec::new(),
+            seed: None,
             max_steps: 1,
+            stop_when: Vec::new(),
             tools: Vec::new(),
             provider_tools: Vec::new(),
             tool_choice: ToolChoice::Auto,
@@ -250,6 +272,21 @@ impl PendingTextRequest {
         self
     }
 
+    /// Adds a string that stops generation the moment the model produces it.
+    /// Call this more than once to add several. See
+    /// [`TextRequest::stop_sequences`] for which providers support this.
+    pub fn with_stop_sequence(mut self, stop: impl Into<String>) -> Self {
+        self.request.stop_sequences.push(stop.into());
+        self
+    }
+
+    /// Sets a seed for providers whose backend can honor one. See
+    /// [`TextRequest::seed`] for what "honor" means here.
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.request.seed = Some(seed);
+        self
+    }
+
     /// Sets how many request/response round trips the tool-calling loop is
     /// allowed to run before it stops on its own. If you're attaching tools with
     /// [`with_tool`](Self::with_tool), you'll usually want this higher than the
@@ -257,6 +294,16 @@ impl PendingTextRequest {
     /// tool call and a follow-up reply).
     pub fn with_max_steps(mut self, max_steps: u32) -> Self {
         self.request.max_steps = max_steps;
+        self
+    }
+
+    /// Adds a condition that can end the tool-calling loop early, checked
+    /// after every round trip alongside `max_steps`. Call this more than
+    /// once to attach several -- the loop stops as soon as any one of them
+    /// (or `max_steps`, or the model simply not asking for another tool
+    /// call) says to. See [`StopCondition`].
+    pub fn with_stop_when(mut self, condition: impl StopCondition + 'static) -> Self {
+        self.request.stop_when.push(Arc::new(condition));
         self
     }
 

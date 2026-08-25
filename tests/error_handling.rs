@@ -43,7 +43,7 @@ async fn a_429_response_becomes_rate_limited_with_headers_parsed() {
         .await;
 
     let result = provider(&mock_server.uri())
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await;
 
     match result {
@@ -75,7 +75,7 @@ async fn a_413_response_becomes_request_too_large() {
         .await;
 
     let result = provider(&mock_server.uri())
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await;
 
     match result {
@@ -97,7 +97,7 @@ async fn a_529_response_becomes_overloaded() {
         .await;
 
     let result = provider(&mock_server.uri())
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await;
 
     assert!(matches!(result, Err(Error::Overloaded { .. })));
@@ -116,7 +116,7 @@ async fn an_unrecognized_error_status_becomes_a_generic_provider_error() {
         .await;
 
     let result = provider(&mock_server.uri())
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await;
 
     match result {
@@ -149,7 +149,7 @@ async fn an_error_body_that_isnt_json_still_produces_a_readable_message() {
         .await;
 
     let result = provider(&mock_server.uri())
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await;
 
     match result {
@@ -172,7 +172,7 @@ async fn a_malformed_success_body_becomes_a_decode_error() {
         .await;
 
     let result = provider(&mock_server.uri())
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await;
 
     assert!(matches!(result, Err(Error::Decode { .. })));
@@ -197,7 +197,7 @@ async fn a_well_formed_success_response_still_works_through_the_mock() {
         .await;
 
     let step = provider(&mock_server.uri())
-        .text_step(TextRequest::new("gpt-4o-mini"))
+        .text_step(&TextRequest::new("gpt-4o-mini"))
         .await
         .unwrap();
 

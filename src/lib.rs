@@ -101,8 +101,9 @@
 //!   (`from_env` isn't linked above: it only exists once any provider feature
 //!   is enabled, so a doc build with none enabled has nothing to link to.)
 //! - Every capability -- [`text`] generation (streaming or not),
-//!   [`structured`] output, [`moderation`], [`embeddings`], [`images`], and
-//!   [`audio`] (text-to-speech and speech-to-text) -- follows the same shape:
+//!   [`structured`] output, [`moderation`], [`embeddings`], [`rerank`]ing,
+//!   [`images`], and [`audio`] (text-to-speech and speech-to-text) --
+//!   follows the same shape:
 //!   ask the registry for a fluent request builder, chain `.with_*()` calls
 //!   to describe what you want, then call an async method like
 //!   [`text::PendingTextRequest::generate`] (or
@@ -139,9 +140,11 @@ pub mod audio;
 pub mod embeddings;
 pub mod error;
 pub mod images;
+pub mod middleware;
 pub mod moderation;
 pub mod provider;
 pub mod registry;
+pub mod rerank;
 pub mod schema;
 pub mod stream_event;
 pub mod stream_loop;

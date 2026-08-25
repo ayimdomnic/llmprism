@@ -7,22 +7,26 @@ use std::time::Duration;
 
 use reqwest::header::HeaderMap;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware, RetryableStrategy};
 
 use crate::error::Error;
 use crate::value_objects::RateLimit;
 
 /// Builds the HTTP client every provider sends requests through by default.
 ///
-/// It automatically retries a small number of times on purely transient
-/// failures -- a dropped connection, a timeout, a generic `5xx` -- so a brief
-/// network hiccup doesn't have to become an error your application sees.
+/// It automatically retries up to twice, with exponential backoff, via
+/// `reqwest-retry`'s [`DefaultRetryableStrategy`](reqwest_retry::DefaultRetryableStrategy) -- which covers purely
+/// transient failures (a dropped connection, a timeout) *and* `429`
+/// (rate-limited) and any `5xx` (including `529`, overloaded) responses, since
+/// those are exactly the statuses a provider expects a well-behaved client to
+/// retry. A request only surfaces as [`Error::RateLimited`]/[`Error::Overloaded`]
+/// once those retries are exhausted -- see [`ErrorMapper`] for how that mapping
+/// happens. `413` ("request too large") and other `4xx` statuses are never
+/// retried, since resending the same request can't change the outcome.
 ///
-/// This is deliberately *not* where rate-limiting (`429`), overload (`529`), or
-/// "request too large" (`413`) responses get handled: those carry information
-/// (like how long to wait before retrying) that's more useful surfaced to you as
-/// a specific, inspectable [`Error`] than silently retried away. See
-/// [`ErrorMapper`] for that part.
+/// Use [`build_http_client_with_max_retries`] to change the retry count (`0`
+/// disables retrying entirely, surfacing every failure on the first attempt),
+/// or [`build_http_client_with_retry_strategy`] to change *what* gets retried.
 ///
 /// There's deliberately no overall request timeout here either, even though
 /// that means a hung connection can block a call indefinitely: a blanket
@@ -35,9 +39,77 @@ use crate::value_objects::RateLimit;
 /// hand it to a provider's `with_client` constructor (every provider that
 /// talks over HTTP has one) instead of using this function.
 pub fn build_http_client() -> ClientWithMiddleware {
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(2);
+    build_http_client_with_max_retries(2)
+}
+
+/// Like [`build_http_client`], but with a configurable retry count instead of
+/// the hardcoded default of `2`. Pass `0` to disable retrying entirely -- every
+/// request either succeeds or fails on the first attempt, which is useful if
+/// you'd rather implement your own retry/backoff policy (for example, one that
+/// honors a provider's `retry_after` exactly) on top of the typed
+/// [`Error::RateLimited`]/[`Error::Overloaded`] this crate already gives you.
+///
+/// ```
+/// # #[cfg(feature = "openai")]
+/// # {
+/// use llmprism::client::build_http_client_with_max_retries;
+/// use llmprism::providers::openai::OpenAiProvider;
+///
+/// // Retry more aggressively than the default.
+/// let provider = OpenAiProvider::new("sk-...").with_client(build_http_client_with_max_retries(5));
+/// # }
+/// ```
+pub fn build_http_client_with_max_retries(max_retries: u32) -> ClientWithMiddleware {
+    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(max_retries);
     ClientBuilder::new(reqwest::Client::new())
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build()
+}
+
+/// Like [`build_http_client_with_max_retries`], but with a custom
+/// [`RetryableStrategy`] deciding what's worth retrying instead of
+/// `reqwest-retry`'s [`DefaultRetryableStrategy`](reqwest_retry::DefaultRetryableStrategy). Reach for this when the
+/// default's status-code judgment doesn't fit your case -- most commonly, to
+/// stop a `429`/`529` from being retried away so it always surfaces as
+/// [`Error::RateLimited`]/[`Error::Overloaded`] on the first attempt:
+///
+/// ```
+/// # #[cfg(feature = "openai")]
+/// # {
+/// use llmprism::client::build_http_client_with_retry_strategy;
+/// use llmprism::providers::openai::OpenAiProvider;
+/// use reqwest_retry::{Retryable, RetryableStrategy};
+///
+/// struct NeverRetryRateLimits;
+///
+/// impl RetryableStrategy for NeverRetryRateLimits {
+///     fn handle(
+///         &self,
+///         response: &Result<reqwest::Response, reqwest_middleware::Error>,
+///     ) -> Option<Retryable> {
+///         match response {
+///             Ok(response) if matches!(response.status().as_u16(), 429 | 529) => {
+///                 Some(Retryable::Fatal)
+///             }
+///             _ => reqwest_retry::DefaultRetryableStrategy.handle(response),
+///         }
+///     }
+/// }
+///
+/// let provider = OpenAiProvider::new("sk-...")
+///     .with_client(build_http_client_with_retry_strategy(2, NeverRetryRateLimits));
+/// # }
+/// ```
+pub fn build_http_client_with_retry_strategy(
+    max_retries: u32,
+    strategy: impl RetryableStrategy + Send + Sync + 'static,
+) -> ClientWithMiddleware {
+    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(max_retries);
+    ClientBuilder::new(reqwest::Client::new())
+        .with(RetryTransientMiddleware::new_with_policy_and_strategy(
+            retry_policy,
+            strategy,
+        ))
         .build()
 }
 

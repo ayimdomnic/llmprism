@@ -48,6 +48,8 @@ pub fn build_request(request: &TextRequest) -> ChatRequest {
         stream_options: None,
         response_format: None,
         reasoning_effort: request.reasoning_effort.clone(),
+        stop: request.stop_sequences.clone(),
+        seed: request.seed,
     }
 }
 
@@ -87,6 +89,8 @@ pub fn build_structured_request(request: &StructuredRequest) -> ChatRequest {
             }
         })),
         reasoning_effort: request.reasoning_effort.clone(),
+        stop: Vec::new(),
+        seed: request.seed,
     }
 }
 
@@ -285,28 +289,44 @@ pub fn parse_structured_response(
         });
     }
 
+    let finish_reason = map_finish_reason(&choice.finish_reason);
+    let response_usage = usage.map(map_usage).unwrap_or_default();
+    let meta = Meta {
+        id: Some(id),
+        model: Some(model),
+        rate_limits: Vec::new(),
+    };
+
     let content = choice
         .message
         .content
         .ok_or_else(|| Error::StructuredDecode {
             provider: provider_name.to_string(),
             message: "response contained no content".to_string(),
+            context: Box::new(crate::error::StructuredDecodeContext {
+                raw: String::new(),
+                finish_reason,
+                usage: response_usage,
+                meta: meta.clone(),
+            }),
         })?;
 
     let data = serde_json::from_str(&content).map_err(|e| Error::StructuredDecode {
         provider: provider_name.to_string(),
         message: e.to_string(),
+        context: Box::new(crate::error::StructuredDecodeContext {
+            raw: content.clone(),
+            finish_reason,
+            usage: response_usage,
+            meta: meta.clone(),
+        }),
     })?;
 
     Ok(StructuredResponse {
         data,
-        finish_reason: map_finish_reason(&choice.finish_reason),
-        usage: usage.map(map_usage).unwrap_or_default(),
-        meta: Meta {
-            id: Some(id),
-            model: Some(model),
-            rate_limits: Vec::new(),
-        },
+        finish_reason,
+        usage: response_usage,
+        meta,
     })
 }
 
@@ -408,5 +428,17 @@ mod tests {
         request.reasoning_effort = Some("high".to_string());
         let wire_request = build_request(&request);
         assert_eq!(wire_request.reasoning_effort.as_deref(), Some("high"));
+    }
+
+    #[test]
+    fn build_request_passes_stop_sequences_and_seed_through() {
+        let mut request = TextRequest::new("gpt-4o-mini");
+        request.stop_sequences = vec!["STOP".to_string(), "END".to_string()];
+        request.seed = Some(42);
+
+        let wire_request = build_request(&request);
+
+        assert_eq!(wire_request.stop, vec!["STOP", "END"]);
+        assert_eq!(wire_request.seed, Some(42));
     }
 }

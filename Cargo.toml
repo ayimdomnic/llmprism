@@ -40,6 +40,7 @@ eventsource-stream = { version = "0.2", optional = true }
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
+criterion = { version = "0.8", features = ["async_tokio"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 wiremock = "0.6"
 
@@ -85,3 +86,30 @@ full = [
     "elevenlabs",
     "gemini",
 ]
+
+# Every bench below sets `harness = false` since criterion provides its own
+# `main`. `tool_loop` and `middleware` need no feature at all -- `Registry`,
+# `FakeProvider`, and `ProviderMiddleware` are unconditional -- but
+# `provider_options` benchmarks `client::merge_provider_options`, which only
+# exists behind `http`, so `cargo bench` needs at least `--features openai`
+# (or any other feature that implies `http`) to build that one.
+[[bench]]
+name = "schema"
+harness = false
+
+[[bench]]
+name = "tool_loop"
+harness = false
+
+[[bench]]
+name = "stream_loop"
+harness = false
+
+[[bench]]
+name = "middleware"
+harness = false
+
+[[bench]]
+name = "provider_options"
+harness = false
+required-features = ["http"]

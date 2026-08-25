@@ -43,20 +43,20 @@ thing -- tool calling works exactly the same way either way.
 
 ## Status
 
-This crate is early (`0.1.0`, pre-1.0) and the public API may still change, but
-every provider and capability in the original scope is implemented. Not every
+This crate is early (pre-1.0) and the public API may still change, but every
+provider and capability in the original scope is implemented. Not every
 provider supports every capability -- a provider's own API has to actually offer
 it -- so here's what works where:
 
-| Provider                                                     | Text + tools + streaming | Structured output | Moderation | Embeddings | Images | Audio |
-| -------------------------------------------------------------| :-----------------------: | :----------------: | :--------: | :--------: | :----: | :---: |
-| **OpenAI**                                                   | ✅                         | ✅                  | ✅          | ✅          | ✅      | ✅     |
-| **Anthropic**                                                | ✅                         | ✅                  |            |            |        |       |
-| **Gemini**                                                   | ✅                         | ✅                  |            | ✅          |        |       |
-| **Groq**, **DeepSeek**, **Mistral**, **xAI**, **OpenRouter**, **Perplexity**, **Z.ai** | ✅ |     |            |            |        |       |
-| **Ollama**                                                   | ✅                         |                     |            | ✅          |        |       |
-| **VoyageAI**                                                 |                            |                     |            | ✅          |        |       |
-| **ElevenLabs**                                                |                            |                     |            |            |        | ✅     |
+| Provider                                                     | Text + tools + streaming | Structured output | Moderation | Embeddings | Rerank | Images | Audio |
+| -------------------------------------------------------------| :-----------------------: | :----------------: | :--------: | :--------: | :----: | :----: | :---: |
+| **OpenAI**                                                   | ✅                         | ✅                  | ✅          | ✅          |        | ✅      | ✅     |
+| **Anthropic**                                                | ✅                         | ✅                  |            |            |        |        |       |
+| **Gemini**                                                   | ✅                         | ✅                  |            | ✅          |        |        |       |
+| **Groq**, **DeepSeek**, **Mistral**, **xAI**, **OpenRouter**, **Perplexity**, **Z.ai** | ✅ |     |            |            |        |        |       |
+| **Ollama**                                                   | ✅                         |                     |            | ✅          |        |        |       |
+| **VoyageAI**                                                 |                            |                     |            | ✅          | ✅      |        |       |
+| **ElevenLabs**                                                |                            |                     |            |            |        |        | ✅     |
 
 A few notes on the gaps:
 
@@ -73,9 +73,10 @@ A few notes on the gaps:
 - Ollama also reuses the OpenAI provider (plus embeddings), needs no API key
   by default, and -- unlike every other provider -- is registered by
   `Registry::from_env()` unconditionally rather than only when a key is set.
-- VoyageAI and ElevenLabs are single-capability specialists: VoyageAI does
-  only embeddings (frequently paired with Anthropic, which has none of its
-  own), and ElevenLabs does only text-to-speech and speech-to-text.
+- VoyageAI and ElevenLabs are retrieval/audio specialists: VoyageAI does
+  embeddings and reranking (frequently paired with Anthropic, which has
+  neither of its own), and ElevenLabs does only text-to-speech and
+  speech-to-text.
 
 ## Installing
 
@@ -98,8 +99,9 @@ the providers you actually use. Turn on everything with the `full` feature.
   In tests you register a `FakeProvider` under the same name instead -- no other
   code has to change.
 - Every capability -- **Text**, **structured output**, **moderation**,
-  **embeddings**, **images**, and **audio** (text-to-speech and
-  speech-to-text) -- follows the same shape: call a method on the registry to
+  **embeddings**, **reranking**, **images**, and **audio** (text-to-speech
+  and speech-to-text) -- follows the same shape: call a method on the
+  registry to
   get a fluent builder, chain `.with_*()` calls to describe the request, then
   run it -- `.generate()` (all at once) or `.stream()` (incrementally, as a
   `Stream` of events) for Text, `.generate()` for the others. Not every
@@ -115,6 +117,10 @@ the providers you actually use. Turn on everything with the `full` feature.
   Schema dialect. OpenAI and Anthropic get there differently under the hood (a
   native enforced response format vs. a forced tool call); you get the same
   `StructuredResponse` back either way.
+- **`ProviderMiddleware`** wraps a registered provider to intercept its calls
+  from outside its own implementation -- logging, caching, redaction, a
+  default system prompt, or short-circuiting a call entirely. Attach one with
+  `Registry::wrap`; middlewares compose.
 
 Run `cargo doc --open --all-features` for the full reference -- every public type
 has a plain-language explanation of what it's for and, where it helps, a short
@@ -122,7 +128,7 @@ example.
 
 ## Examples
 
-The [`examples/`](examples) directory has five runnable examples: text
+The [`examples/`](examples) directory has runnable examples covering text
 generation, streaming, tool calling, structured output, and testing your own
 code with `FakeProvider` (the only one that needs no API key -- try that one
 first):
@@ -134,11 +140,18 @@ OPENAI_API_KEY=sk-... cargo run --example text_generation --features openai
 OPENAI_API_KEY=sk-... cargo run --example streaming --features openai
 OPENAI_API_KEY=sk-... cargo run --example tool_calling --features openai
 OPENAI_API_KEY=sk-... cargo run --example structured_output --features openai
+
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_text_generation --features anthropic
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_streaming --features anthropic
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_tool_calling --features anthropic
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_structured_output --features anthropic
 ```
 
-The four gated examples target OpenAI specifically, but nothing about them is
-OpenAI-specific -- swap the provider name and Cargo feature and they work the
-same way against any other registered provider.
+The OpenAI and Anthropic examples are otherwise identical pairs -- nothing
+about the OpenAI ones is actually OpenAI-specific, swapping the provider name
+and Cargo feature is the only difference, which is exactly the point: the
+Anthropic set exists mainly so you don't have to make that edit yourself. The
+same swap works for any other registered provider too.
 
 ## Testing your own code against this crate
 
@@ -175,6 +188,7 @@ cargo fmt --all -- --check
 cargo clippy --all-features --all-targets -- -D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 cargo build --examples --features full
+cargo bench --features full                 # benchmarks the crate's own code, not network calls
 ```
 
 Every provider has its own live smoke test under `tests/` (`openai_text.rs`,

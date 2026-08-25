@@ -11,8 +11,10 @@
 //! -- which strategy a given provider uses is an implementation detail of that
 //! provider's `Provider` impl, not something you need to choose yourself.
 
+pub mod repair;
 pub mod request;
 pub mod response;
 
+pub use repair::RepairStrategy;
 pub use request::{PendingStructuredRequest, StructuredRequest};
 pub use response::StructuredResponse;
