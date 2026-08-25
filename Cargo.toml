@@ -38,10 +38,12 @@ reqwest-middleware = { version = "0.4", features = ["json", "multipart"], option
 reqwest-retry = { version = "0.7", optional = true }
 eventsource-stream = { version = "0.2", optional = true }
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["async_tokio"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing-subscriber = "0.3"
 wiremock = "0.6"
 
 [features]
@@ -70,6 +72,11 @@ ollama = ["openai"]
 voyageai = ["http"]
 elevenlabs = ["http"]
 gemini = ["http"]
+
+# Capability add-ons -- not providers, so deliberately not part of "full"
+# (whose own doc comment scopes it to providers). Combine explicitly with
+# whichever providers you're using, e.g. `--features tracing,openai`.
+tracing = ["dep:tracing"]
 
 full = [
     "openai",
