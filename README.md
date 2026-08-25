@@ -128,7 +128,7 @@ example.
 
 ## Examples
 
-The [`examples/`](examples) directory has five runnable examples: text
+The [`examples/`](examples) directory has runnable examples covering text
 generation, streaming, tool calling, structured output, and testing your own
 code with `FakeProvider` (the only one that needs no API key -- try that one
 first):
@@ -140,11 +140,18 @@ OPENAI_API_KEY=sk-... cargo run --example text_generation --features openai
 OPENAI_API_KEY=sk-... cargo run --example streaming --features openai
 OPENAI_API_KEY=sk-... cargo run --example tool_calling --features openai
 OPENAI_API_KEY=sk-... cargo run --example structured_output --features openai
+
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_text_generation --features anthropic
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_streaming --features anthropic
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_tool_calling --features anthropic
+ANTHROPIC_API_KEY=sk-ant-... cargo run --example anthropic_structured_output --features anthropic
 ```
 
-The four gated examples target OpenAI specifically, but nothing about them is
-OpenAI-specific -- swap the provider name and Cargo feature and they work the
-same way against any other registered provider.
+The OpenAI and Anthropic examples are otherwise identical pairs -- nothing
+about the OpenAI ones is actually OpenAI-specific, swapping the provider name
+and Cargo feature is the only difference, which is exactly the point: the
+Anthropic set exists mainly so you don't have to make that edit yourself. The
+same swap works for any other registered provider too.
 
 ## Testing your own code against this crate
 
