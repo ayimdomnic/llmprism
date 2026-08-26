@@ -10,11 +10,44 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ## [Unreleased]
 
 Borrowed from a comparison against Vercel's AI SDK, scoped to what matters
-for server-side Rust applications. Also adds benchmark coverage, unrelated to
-that comparison.
+for server-side Rust applications. Also adds benchmark coverage, a CLI, MCP
+client support, OpenTelemetry-style tracing, and a framework-integration
+roadmap, each unrelated to that comparison.
 
 ### Added
 
+- **CLI** (`cli` feature, new `llmprism` binary): every `Registry`
+  capability as a subcommand (`text`, `stream`, `structured`, `moderate`,
+  `embed`, `rerank`, `image`, `speak`, `transcribe`, `providers`). A thin
+  wrapper around `Registry::from_env()` -- no provider-specific logic of its
+  own. `--json` for machine-readable output; every text-taking flag falls
+  back to stdin when omitted. With `mcp` also enabled, `text`/`stream` gain
+  `--mcp-stdio`/`--mcp-http` flags. See the README's "Command-line usage"
+  section.
+- **MCP client support** (`mcp` feature): `McpToolset::connect_stdio`/
+  `connect_http` discover a remote MCP server's tools and hand them back as
+  ordinary `Tool`s, ready for `with_tool`/`with_tools` -- no
+  protocol-specific code needed in application code. Built on the official
+  `rmcp` SDK; verified against a real server (the MCP "everything"
+  reference server) in `tests/mcp.rs`, not just compiled.
+- **OpenTelemetry-style tracing** (`tracing` feature): `GenAiTracingMiddleware`
+  instruments every `Provider` call with a `tracing` span following the
+  current OpenTelemetry GenAI semantic conventions (`gen_ai.*`). Depends
+  only on `tracing`, not `opentelemetry` directly -- bridge to a real OTel
+  backend from your own application with `tracing-opentelemetry`.
+- **`ObjectSchema::from_raw_json_schema`**: send an already-formed JSON
+  Schema document as-is for a tool's parameters or a structured request's
+  schema, bypassing the `properties`/`required` builder entirely. Shared
+  foundation for both MCP (whose tool schemas arrive this way already) and
+  the CLI's `structured --schema-file`.
+- `ROADMAP.md`: a staged plan for framework integration (Axum first, then
+  persistence and multi-tenancy built on the existing `ProviderMiddleware`
+  seam, then additional frameworks) -- linked from the README.
+- `Registry::provider_names()`, for diagnosing what `from_env()` actually
+  found configured.
+- `Serialize`/`Deserialize` on `AudioOutput`/`AudioResponse`/
+  `TranscriptionResponse` -- every other response type already had these;
+  a pre-existing inconsistency the CLI's `--json` output surfaced.
 - `criterion` benchmarks (`cargo bench --features full`) for the crate's own
   hot paths -- schema-to-JSON-Schema conversion, the tool-calling loop's
   bookkeeping, `Registry::wrap` middleware dispatch overhead, and the
@@ -47,6 +80,19 @@ that comparison.
   fields (`stop_sequences` on `TextRequest` only -- a stop string can
   truncate otherwise-valid JSON, which cuts against the point of a
   structured request).
+
+### Changed
+
+- **Breaking, if you implement `Provider` yourself**: `Provider::text_step`
+  and `Provider::stream_text_once` now take `&TextRequest` instead of an
+  owned `TextRequest`. The non-streaming and streaming tool-calling loops
+  call one of these once per round trip against a conversation that keeps
+  growing (each round trip appends new messages), so taking ownership
+  forced cloning the entire, ever-larger request on every single round
+  trip -- no provider implementation ever actually needed to *consume* the
+  request, only read it. Update a custom `Provider` by changing the
+  parameter type and, if you were already just borrowing internally
+  (`build_request(&request)`), removing the now-redundant `&`.
 
 ## [0.1.1] - 2026-08-24
 
