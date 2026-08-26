@@ -167,6 +167,12 @@ pub mod client;
 ))]
 pub mod providers;
 
+#[cfg(feature = "tracing")]
+pub mod tracing_middleware;
+
+#[cfg(feature = "mcp")]
+pub mod mcp;
+
 pub use error::Error;
 pub use provider::Provider;
 pub use registry::Registry;

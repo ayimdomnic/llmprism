@@ -150,6 +150,14 @@ pub enum Error {
     #[cfg(feature = "http")]
     #[error("http middleware error: {0}")]
     Middleware(#[from] reqwest_middleware::Error),
+
+    /// Connecting to, or communicating with, an MCP server failed (see
+    /// [`crate::mcp`]) -- the process couldn't be spawned, the connection was
+    /// refused, or the server returned a protocol-level error. Only present
+    /// when the `mcp` feature is enabled.
+    #[cfg(feature = "mcp")]
+    #[error("mcp error: {message}")]
+    Mcp { message: String },
 }
 
 /// What [`Error::StructuredDecode`] carries about the response that failed to

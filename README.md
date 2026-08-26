@@ -153,6 +153,36 @@ and Cargo feature is the only difference, which is exactly the point: the
 Anthropic set exists mainly so you don't have to make that edit yourself. The
 same swap works for any other registered provider too.
 
+## Command-line usage
+
+Every capability is also reachable from the shell, via the `cli` feature --
+a thin wrapper around the same `Registry::from_env()` every Rust consumer
+uses, so it needs no provider-specific setup beyond the feature flags and
+API keys you'd already need in code:
+
+```sh
+cargo install llmprism --features cli,openai,anthropic
+
+OPENAI_API_KEY=sk-... llmprism text -p openai -m gpt-4o-mini -P "What's the capital of France?"
+OPENAI_API_KEY=sk-... llmprism stream -p openai -m gpt-4o-mini -P "Count to five."
+OPENAI_API_KEY=sk-... llmprism structured -p openai -m gpt-4o-mini --schema-file recipe.json -P "A pasta recipe"
+OPENAI_API_KEY=sk-... llmprism embed -p openai -m text-embedding-3-small -i "hello world"
+llmprism providers   # lists what's compiled in and has a key configured
+```
+
+Every text-taking flag (`-P`/`--prompt`, `-i`/`--input`) falls back to
+reading stdin when omitted, so commands compose the normal Unix way:
+`echo "..." | llmprism text -p openai -m gpt-4o-mini`. Add `--json` to any
+command for machine-readable output instead of the plain-text summary.
+
+With the `mcp` feature also enabled, `text`/`stream` gain repeatable
+`--mcp-stdio "<command and args>"` / `--mcp-http <url>` flags that connect
+to an MCP server and attach its tools before generating -- see
+[`examples/mcp_tool_calling.rs`](examples/mcp_tool_calling.rs) for the same
+thing from Rust code. Run `llmprism --help` (or `llmprism <command>
+--help`) for the full flag list; every subcommand maps directly to one
+`Registry` capability.
+
 ## Testing your own code against this crate
 
 You don't need real API keys to test code that uses `llmprism`. Register a
@@ -203,8 +233,9 @@ isn't enough to catch a feature-gated item that only compiles because some
 Before publishing a new version, `cargo publish --dry-run` packages and
 compiles the crate exactly as crates.io would, without actually uploading
 anything. See [`scripts/release.sh`](scripts/release.sh) for the actual
-release steps, and [CHANGELOG.md](CHANGELOG.md) for what's shipped in each
-version.
+release steps, [CHANGELOG.md](CHANGELOG.md) for what's shipped in each
+version, and [ROADMAP.md](ROADMAP.md) for where framework integration
+(Axum, persistence, multi-tenancy) is headed next.
 
 ## License
 

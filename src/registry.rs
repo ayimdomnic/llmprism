@@ -126,6 +126,15 @@ impl Registry {
     /// # Errors
     ///
     /// Returns [`Error::UnknownProvider`] if nothing is registered under `name`.
+    /// Every name a provider is currently registered under, in no particular
+    /// order -- useful for diagnostics, like confirming what `from_env()`
+    /// actually found configured. (Plain text, not a doc link: `from_env`
+    /// only exists with the `http` feature on, but this method doesn't
+    /// require it.)
+    pub fn provider_names(&self) -> Vec<&str> {
+        self.providers.keys().map(String::as_str).collect()
+    }
+
     pub fn provider(&self, name: &str) -> Result<Arc<dyn Provider>, Error> {
         self.providers
             .get(name)
