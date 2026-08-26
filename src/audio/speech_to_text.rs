@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::value_objects::Meta;
@@ -62,7 +64,7 @@ impl SpeechToTextRequest {
 }
 
 /// The result of a speech-to-text call.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranscriptionResponse {
     pub text: String,
     pub meta: Meta,

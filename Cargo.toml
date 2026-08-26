@@ -40,6 +40,7 @@ eventsource-stream = { version = "0.2", optional = true }
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 tracing = { version = "0.1", optional = true }
 rmcp = { version = "3.1", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"], optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["async_tokio"] }
@@ -84,6 +85,10 @@ tracing = ["dep:tracing"]
 # combined with any provider feature. Not worth avoiding: rmcp doesn't offer
 # a way to reuse an external HTTP client for its transport.
 mcp = ["dep:rmcp"]
+# Implies "http" (not any specific provider) since `Registry::from_env()`,
+# which the CLI is a thin wrapper around, needs it -- pair with whichever
+# provider features you actually want, e.g. `--features cli,openai,anthropic`.
+cli = ["dep:clap", "http"]
 
 full = [
     "openai",
@@ -100,6 +105,11 @@ full = [
     "elevenlabs",
     "gemini",
 ]
+
+[[bin]]
+name = "llmprism"
+path = "src/bin/llmprism.rs"
+required-features = ["cli"]
 
 # Every bench below sets `harness = false` since criterion provides its own
 # `main`. `tool_loop` and `middleware` need no feature at all -- `Registry`,

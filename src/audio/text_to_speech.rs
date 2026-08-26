@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::value_objects::Meta;
@@ -35,14 +37,14 @@ impl TextToSpeechRequest {
 
 /// Generated audio: raw bytes plus the MIME type they're encoded in (e.g.
 /// `"audio/mpeg"`), so you know how to write, play, or re-encode them.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioOutput {
     pub data: Vec<u8>,
     pub mime_type: String,
 }
 
 /// The result of a text-to-speech call.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioResponse {
     pub audio: AudioOutput,
     pub meta: Meta,
