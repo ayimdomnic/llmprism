@@ -9,6 +9,10 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-08-26
+
 Borrowed from a comparison against Vercel's AI SDK, scoped to what matters
 for server-side Rust applications. Also adds benchmark coverage, a CLI, MCP
 client support, OpenTelemetry-style tracing, and a framework-integration
@@ -157,6 +161,7 @@ consistent, fluent API.
   provider feature individually, formatting, linting, and documentation
   builds.
 
-[Unreleased]: https://github.com/ayimdomnic/llmprism/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/ayimdomnic/llmprism/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ayimdomnic/llmprism/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/ayimdomnic/llmprism/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ayimdomnic/llmprism/releases/tag/v0.1.0
