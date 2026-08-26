@@ -106,10 +106,7 @@ impl McpToolset {
             .into_iter()
             .map(|tool| {
                 let name = tool.name.to_string();
-                let description = tool
-                    .description
-                    .map(|d| d.to_string())
-                    .unwrap_or_default();
+                let description = tool.description.map(|d| d.to_string()).unwrap_or_default();
                 let parameters = ObjectSchema::from_raw_json_schema(
                     name.clone(),
                     Value::Object((*tool.input_schema).clone()),
