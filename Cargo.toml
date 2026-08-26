@@ -39,6 +39,7 @@ reqwest-retry = { version = "0.7", optional = true }
 eventsource-stream = { version = "0.2", optional = true }
 tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 tracing = { version = "0.1", optional = true }
+rmcp = { version = "3.1", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["async_tokio"] }
@@ -77,6 +78,12 @@ gemini = ["http"]
 # (whose own doc comment scopes it to providers). Combine explicitly with
 # whichever providers you're using, e.g. `--features tracing,openai`.
 tracing = ["dep:tracing"]
+# `rmcp`'s HTTP transport (client-side-sse) pulls in its own reqwest 0.13,
+# independent of this crate's own reqwest 0.12 (behind "http") -- both can
+# coexist in one build, at the cost of compiling reqwest twice when "mcp" is
+# combined with any provider feature. Not worth avoiding: rmcp doesn't offer
+# a way to reuse an external HTTP client for its transport.
+mcp = ["dep:rmcp"]
 
 full = [
     "openai",
