@@ -128,7 +128,7 @@ example.
 
 ## Examples
 
-The [`examples/`](examples) directory has runnable examples covering text
+The [`examples/`](crates/llmprism/examples) directory has runnable examples covering text
 generation, streaming, tool calling, structured output, and testing your own
 code with `FakeProvider` (the only one that needs no API key -- try that one
 first):
@@ -178,7 +178,7 @@ command for machine-readable output instead of the plain-text summary.
 With the `mcp` feature also enabled, `text`/`stream` gain repeatable
 `--mcp-stdio "<command and args>"` / `--mcp-http <url>` flags that connect
 to an MCP server and attach its tools before generating -- see
-[`examples/mcp_tool_calling.rs`](examples/mcp_tool_calling.rs) for the same
+[`examples/mcp_tool_calling.rs`](crates/llmprism/examples/mcp_tool_calling.rs) for the same
 thing from Rust code. Run `llmprism --help` (or `llmprism <command>
 --help`) for the full flag list; every subcommand maps directly to one
 `Registry` capability.

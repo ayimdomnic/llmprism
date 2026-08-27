@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # Cuts a release of llmprism: verifies the tree is clean and green, bumps
-# Cargo.toml's version, commits, tags, pushes, publishes to crates.io, and
-# creates a GitHub release. Deliberately manual, not CI-triggered -- run it
+# crates/llmprism/Cargo.toml's version, commits, tags, pushes, publishes to
+# crates.io, and creates a GitHub release. Deliberately manual, not
+# CI-triggered -- run it
 # yourself when you're ready to ship a release, after CHANGELOG.md already
 # has an entry for the version you're releasing (this script does not write
 # the changelog for you).
@@ -56,11 +57,11 @@ RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 echo "==> Verifying the package itself builds cleanly (cargo publish --dry-run)"
 cargo publish --dry-run
 
-echo "==> Bumping Cargo.toml to ${VERSION}"
-sed -i.bak "0,/^version = \".*\"/s//version = \"${VERSION}\"/" Cargo.toml
-rm -f Cargo.toml.bak
+echo "==> Bumping crates/llmprism/Cargo.toml to ${VERSION}"
+sed -i.bak "0,/^version = \".*\"/s//version = \"${VERSION}\"/" crates/llmprism/Cargo.toml
+rm -f crates/llmprism/Cargo.toml.bak
 
-git add Cargo.toml CHANGELOG.md
+git add crates/llmprism/Cargo.toml CHANGELOG.md
 if git diff --cached --quiet; then
     # Cargo.toml already had this version (e.g. cutting the very first
     # release, where nothing needs bumping) -- nothing to commit, just tag
