@@ -30,6 +30,12 @@ pub enum ToolError {
     /// The tool's own code returned an error while running.
     #[error("tool '{name}' failed: {message}")]
     Runtime { name: String, message: String },
+    /// The tool call [`needs_approval`](crate::tool::Tool::needs_approval),
+    /// and either the request's
+    /// [`ApprovalHandler`](crate::approval::ApprovalHandler) denied it, or
+    /// no handler was attached to the request at all.
+    #[error("tool '{name}' requires approval but wasn't approved")]
+    ApprovalDenied { name: String },
 }
 
 /// The single error type returned by every fallible operation in this crate.

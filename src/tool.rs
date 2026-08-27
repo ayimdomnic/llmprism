@@ -87,6 +87,21 @@ pub trait Tool: Send + Sync {
         false
     }
 
+    /// Whether a call to this tool must be approved before it runs. Defaults
+    /// to `false` -- every existing `Tool` is unaffected unless it opts in.
+    ///
+    /// When `true`, the tool loop consults the request's
+    /// [`ApprovalHandler`](crate::approval::ApprovalHandler) (see
+    /// [`PendingTextRequest::with_approval_handler`](crate::text::PendingTextRequest::with_approval_handler))
+    /// before calling [`call`](Self::call). Denied -- or no handler attached
+    /// at all -- means [`call`](Self::call) never runs; the model sees a
+    /// normal tool-error result instead, the same as any other tool
+    /// failure, so it can react (tell the user permission was needed, try
+    /// something else).
+    fn needs_approval(&self) -> bool {
+        false
+    }
+
     /// Runs the tool with the arguments the model provided and returns the result
     /// to send back to the model.
     ///

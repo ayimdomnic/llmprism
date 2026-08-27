@@ -136,6 +136,7 @@
 //! once one of its features is enabled) and cover Text generation only --
 //! see that module's own docs (with the relevant feature enabled) for why.
 
+pub mod approval;
 pub mod audio;
 pub mod embeddings;
 pub mod error;
