@@ -21,6 +21,18 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   variants like every other capability. Invalid base64 in a
   transcription request maps to `400`, a failure mode no other route has
   (it never reaches a provider, so it isn't a `llmprism::Error` at all).
+### Added
+
+- **Anthropic streaming structured output**: `stream_structured_once` now
+  implemented for Anthropic too, closing the gap noted in 0.3.0 -- reads
+  the forced tool call's `input_json_delta` events (the same SSE parsing
+  `stream_text_once` already does for plain text/tool calls, narrowed to
+  the one `tool_use` block a forced call always produces), repairing each
+  chunk into partial JSON via `partial-json-fixer` the same way OpenAI's
+  implementation does. `AnthropicProvider` also gained `with_base_url`
+  (every other provider already had this) -- mainly so this could be
+  tested against a mock server rather than only ever live, but also usable
+  for a proxy/gateway that mirrors the Messages API shape.
 
 ## [llmprism-axum 0.1.0] - 2026-08-27
 

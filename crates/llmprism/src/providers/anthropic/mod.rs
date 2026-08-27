@@ -18,7 +18,7 @@ use crate::client::{build_http_client, merge_provider_options, ErrorMapper};
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
-use crate::structured::{StructuredRequest, StructuredResponse};
+use crate::structured::{StructuredRequest, StructuredResponse, StructuredStreamEvent};
 use crate::text::{Step, TextRequest};
 use crate::value_objects::{Meta, ToolCall, Usage};
 
@@ -53,9 +53,17 @@ pub struct AnthropicProvider {
 impl AnthropicProvider {
     /// Creates a provider that talks to the real Anthropic API using `api_key`.
     pub fn new(api_key: impl Into<String>) -> Self {
+        Self::with_base_url(api_key, DEFAULT_BASE_URL)
+    }
+
+    /// Creates a provider pointed at a different base URL -- useful for a
+    /// proxy or gateway that mirrors the Messages API shape rather than
+    /// `api.anthropic.com` itself, and for testing against a mock server
+    /// (see this crate's own `tests/`, e.g. `structured_streaming.rs`).
+    pub fn with_base_url(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
             api_key: api_key.into(),
-            base_url: DEFAULT_BASE_URL.to_string(),
+            base_url: base_url.into(),
             version: ANTHROPIC_VERSION.to_string(),
             client: build_http_client(),
         }
@@ -284,6 +292,155 @@ impl Provider for AnthropicProvider {
             })?;
 
         maps::parse_structured_response(wire_response, self.name())
+    }
+
+    async fn stream_structured_once(
+        &self,
+        request: &StructuredRequest,
+    ) -> Result<BoxStream<'static, Result<StructuredStreamEvent, Error>>, Error> {
+        // Reuses the same forced-tool-call request `structured` sends
+        // (`build_structured_request`) -- the schema-constrained output
+        // arrives as a `tool_use` content block's `input_json_delta` events,
+        // read with the same event dispatch `stream_text_once` already has
+        // for `ContentBlockDelta`/`ContentBlockStop`, just narrowed to the
+        // one tool-use block a forced call always produces exactly one of.
+        let mut wire_request = maps::build_structured_request(request);
+        wire_request.stream = Some(true);
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
+
+        let http_response = self
+            .client
+            .post(format!("{}/messages", self.base_url))
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", &self.version)
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        if !status.is_success() {
+            let headers = http_response.headers().clone();
+            let body_text = http_response.text().await?;
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let provider_name = self.name().to_string();
+        let mut events = http_response.bytes_stream().eventsource();
+
+        let stream = try_stream! {
+            let mut meta = Meta::default();
+            let mut stop_reason: Option<String> = None;
+            let mut usage = Usage::default();
+            // Text seen outside the tool-use block, kept only in case the
+            // model doesn't call the forced tool at all (a refusal, most
+            // likely) -- then it's exactly what `Error::StructuredDecode`'s
+            // `raw` should carry, the same as the non-streaming path.
+            let mut text = String::new();
+            let mut arguments = String::new();
+            let mut in_tool_use = false;
+
+            while let Some(event) = events.next().await {
+                let event = event.map_err(|e| Error::StreamDecode {
+                    provider: provider_name.clone(),
+                    message: e.to_string(),
+                })?;
+
+                let data = event.data.trim();
+                if data.is_empty() {
+                    continue;
+                }
+
+                let payload: StreamEventPayload =
+                    serde_json::from_str(data).map_err(|e| Error::StreamDecode {
+                        provider: provider_name.clone(),
+                        message: e.to_string(),
+                    })?;
+
+                match payload {
+                    StreamEventPayload::MessageStart { message } => {
+                        usage = maps::map_usage(message.usage);
+                        meta = Meta {
+                            id: Some(message.id),
+                            model: Some(message.model),
+                            rate_limits: Vec::new(),
+                        };
+                    }
+                    StreamEventPayload::ContentBlockStart { content_block, .. } => {
+                        in_tool_use = matches!(content_block, StreamContentBlockStart::ToolUse { .. });
+                    }
+                    StreamEventPayload::ContentBlockDelta { delta, .. } => match delta {
+                        StreamDelta::InputJsonDelta { partial_json } if in_tool_use => {
+                            arguments.push_str(&partial_json);
+                            // A partial parse failing isn't a stream error --
+                            // `fix_json` is designed to always succeed, but a
+                            // defensive skip here just means this particular
+                            // chunk contributes no preview, not that
+                            // anything is wrong.
+                            let fixed = partial_json_fixer::fix_json(&arguments);
+                            if let Ok(data) = serde_json::from_str(&fixed) {
+                                yield StructuredStreamEvent::PartialObject { data };
+                            }
+                        }
+                        StreamDelta::TextDelta { text: delta } => text.push_str(&delta),
+                        StreamDelta::InputJsonDelta { .. } | StreamDelta::Other => {}
+                    },
+                    StreamEventPayload::ContentBlockStop { .. } => {
+                        in_tool_use = false;
+                    }
+                    StreamEventPayload::MessageDelta { delta, usage: delta_usage } => {
+                        stop_reason = delta.stop_reason;
+                        if let Some(delta_usage) = delta_usage {
+                            usage.completion_tokens = delta_usage.output_tokens;
+                        }
+                    }
+                    StreamEventPayload::MessageStop => break,
+                    StreamEventPayload::Ping | StreamEventPayload::Unknown => {}
+                    StreamEventPayload::Error { error } => {
+                        Err(Error::Provider {
+                            provider: provider_name.clone(),
+                            status: 0,
+                            kind: error.kind,
+                            message: error.message,
+                        })?;
+                    }
+                }
+            }
+
+            let finish_reason = maps::map_structured_finish_reason(stop_reason.as_deref());
+
+            if arguments.is_empty() {
+                Err(Error::StructuredDecode {
+                    provider: provider_name.clone(),
+                    message: "response contained no tool_use block with the structured output".to_string(),
+                    context: Box::new(crate::error::StructuredDecodeContext {
+                        raw: text,
+                        finish_reason,
+                        usage,
+                        meta: meta.clone(),
+                    }),
+                })?;
+            }
+
+            let data: Value = serde_json::from_str(&arguments).map_err(|e| Error::StructuredDecode {
+                provider: provider_name.clone(),
+                message: e.to_string(),
+                context: Box::new(crate::error::StructuredDecodeContext {
+                    raw: arguments.clone(),
+                    finish_reason,
+                    usage,
+                    meta: meta.clone(),
+                }),
+            })?;
+
+            yield StructuredStreamEvent::End {
+                response: StructuredResponse { data, finish_reason, usage, meta },
+            };
+        };
+
+        Ok(stream.boxed())
     }
 }
 

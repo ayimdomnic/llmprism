@@ -320,15 +320,7 @@ pub fn parse_structured_response(
         _ => None,
     });
 
-    // `tool_use` is the success case here -- the model complied with the
-    // forced call -- so it's reported as a normal `Stop`, not `ToolCalls`;
-    // any other stop reason (most notably `max_tokens`, meaning the output may
-    // be truncated/invalid JSON) is preserved via the normal mapping so
-    // callers can still tell something went wrong.
-    let finish_reason = match response.stop_reason.as_deref() {
-        Some("tool_use") => FinishReason::Stop,
-        other => map_finish_reason(other),
-    };
+    let finish_reason = map_structured_finish_reason(response.stop_reason.as_deref());
     let usage = map_usage(response.usage);
     let meta = Meta {
         id: Some(response.id),
@@ -382,6 +374,22 @@ pub(crate) fn map_finish_reason(stop_reason: Option<&str>) -> FinishReason {
         Some("max_tokens") => FinishReason::Length,
         Some("tool_use") => FinishReason::ToolCalls,
         _ => FinishReason::Other,
+    }
+}
+
+/// [`map_finish_reason`], but for a forced-tool-call structured request
+/// (both [`parse_structured_response`] and `stream_structured_once`'s
+/// streaming counterpart in `mod.rs`): a `"tool_use"` stop reason is the
+/// *success* case here -- the model complied with the forced call -- so
+/// it's reported as a normal `Stop`, not `ToolCalls`, unlike plain text
+/// generation where `"tool_use"` genuinely means the model wants to call a
+/// tool. Any other stop reason (most notably `"max_tokens"`, meaning the
+/// output may be truncated/invalid JSON) is preserved via the normal
+/// mapping so callers can still tell something went wrong.
+pub(crate) fn map_structured_finish_reason(stop_reason: Option<&str>) -> FinishReason {
+    match stop_reason {
+        Some("tool_use") => FinishReason::Stop,
+        other => map_finish_reason(other),
     }
 }
 
