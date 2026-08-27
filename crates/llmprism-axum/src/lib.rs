@@ -37,6 +37,8 @@
 //! | `POST /v1/embeddings` | [`embeddings`] | [`llmprism::embeddings::EmbeddingsResponse`] |
 //! | `POST /v1/rerank` | [`rerank`] | [`llmprism::rerank::RerankResponse`] |
 //! | `POST /v1/images` | [`images`] | [`llmprism::images::ImagesResponse`] |
+//! | `POST /v1/audio/speech` | [`audio`] | [`audio::SpeechResponseBody`] |
+//! | `POST /v1/audio/transcriptions` | [`audio`] | [`llmprism::audio::TranscriptionResponse`] |
 //!
 //! # Errors
 //!
@@ -55,11 +57,6 @@
 //!   to a `Registry`/`PendingTextRequest` on your own server before handing
 //!   requests to code that uses this crate, rather than expecting a client
 //!   to send one.
-//! - **Audio** (`/v1/audio/speech`, `/v1/audio/transcriptions`) isn't
-//!   implemented yet -- binary request/response bodies need a deliberate
-//!   design choice (base64 vs. multipart vs. raw bytes) that didn't fit
-//!   this crate's first pass. See `ROADMAP.md` in the workspace root for
-//!   what's tracked as a follow-up.
 //!
 //! # Multi-tenancy
 //!
@@ -81,6 +78,7 @@
 //! `tests/routes.rs` for worked examples covering every route, including
 //! the SSE ones, and `tests/multi_tenant.rs` for [`routes_multi_tenant`].
 
+pub mod audio;
 pub mod embeddings;
 pub mod error;
 pub mod images;
@@ -111,6 +109,8 @@ pub fn routes(registry: Registry) -> Router {
         .route("/v1/embeddings", post(embeddings::embeddings))
         .route("/v1/rerank", post(rerank::rerank))
         .route("/v1/images", post(images::images))
+        .route("/v1/audio/speech", post(audio::speech))
+        .route("/v1/audio/transcriptions", post(audio::transcriptions))
         .with_state(Arc::new(registry))
 }
 
@@ -143,5 +143,10 @@ pub fn routes_multi_tenant(tenant_registry: impl TenantRegistry + 'static) -> Ro
         .route("/v1/embeddings", post(embeddings::embeddings_multi_tenant))
         .route("/v1/rerank", post(rerank::rerank_multi_tenant))
         .route("/v1/images", post(images::images_multi_tenant))
+        .route("/v1/audio/speech", post(audio::speech_multi_tenant))
+        .route(
+            "/v1/audio/transcriptions",
+            post(audio::transcriptions_multi_tenant),
+        )
         .with_state(Arc::new(tenant_registry) as Arc<dyn TenantRegistry>)
 }

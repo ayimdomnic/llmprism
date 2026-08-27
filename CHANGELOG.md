@@ -9,6 +9,18 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+### llmprism-axum
+
+- **Audio endpoints**: `POST /v1/audio/speech` (text-to-speech) and `POST
+  /v1/audio/transcriptions` (speech-to-text), closing the gap 0.1.0 left
+  open. Audio bytes travel as base64-encoded strings in the JSON body
+  (matching how `llmprism::value_objects::MediaData::Base64` already
+  represents embedded binary media in core) rather than multipart or raw
+  bytes -- keeps every route in this crate JSON-in/JSON-out, with no
+  special case for just these two. Both routes have `_multi_tenant`
+  variants like every other capability. Invalid base64 in a
+  transcription request maps to `400`, a failure mode no other route has
+  (it never reaches a provider, so it isn't a `llmprism::Error` at all).
 ### Added
 
 - **Anthropic streaming structured output**: `stream_structured_once` now

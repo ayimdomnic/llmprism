@@ -43,6 +43,8 @@ matching `Registry` method would.
 | `POST /v1/embeddings`          | Text → vector, for similarity search / retrieval        |
 | `POST /v1/rerank`              | Score and sort documents against a query                |
 | `POST /v1/images`              | Image generation                                        |
+| `POST /v1/audio/speech`        | Text-to-speech                                          |
+| `POST /v1/audio/transcriptions`| Speech-to-text                                           |
 
 Full request/response shapes, worked JSON examples, and the exact
 `llmprism::Error` → HTTP status mapping are documented per route on
@@ -79,6 +81,25 @@ data, ending with a `StreamEvent::StreamEnd`. If something goes wrong
 partway through, you get `event: error` instead -- HTTP status can't change
 after an SSE response has already started, so a mid-stream failure has to
 be reported as data, not as a failed response.
+
+### Example: text-to-speech
+
+Audio bytes travel as base64 in both directions -- matching how
+`llmprism::value_objects::MediaData::Base64` already represents embedded
+binary media in core, so this crate stays JSON-in/JSON-out with no
+multipart special case:
+
+```sh
+curl -s http://localhost:3000/v1/audio/speech \
+  -H 'content-type: application/json' \
+  -d '{"provider": "openai", "model": "tts-1", "input": "Hello, world!", "voice": "alloy"}'
+# => {"audio": {"data": "<base64 mp3 bytes>", "mime_type": "audio/mpeg"}, "meta": {...}}
+```
+
+`POST /v1/audio/transcriptions` takes the same `audio: {data, mime_type,
+filename}` shape as its input. Invalid base64 in `audio.data` is the one
+failure mode no other route has -- it never reaches a provider, so it maps
+to `400` rather than `ApiError`'s usual mapping.
 
 ## Multi-tenancy
 
@@ -118,10 +139,6 @@ through the usual error handling.
   `call()` method, which a JSON body can't describe. Attach tools directly
   to the `Registry`/`PendingTextRequest` your server builds, the same way
   you would without this crate.
-- **Audio** (`/v1/audio/speech`, `/v1/audio/transcriptions`) isn't wired up
-  yet -- binary bodies need a deliberate base64-vs-multipart-vs-raw-bytes
-  decision, tracked as a Phase 1 follow-up in
-  [`ROADMAP.md`](../../ROADMAP.md).
 
 ## Installing
 

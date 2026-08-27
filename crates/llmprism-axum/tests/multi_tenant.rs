@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use llmprism::tenancy::{RequestContext, StaticTenantRegistry};
-use llmprism::testing::{FakeProvider, FakeTextResponse};
+use llmprism::testing::{FakeAudioResponse, FakeProvider, FakeTextResponse};
 use llmprism::Registry;
 use serde_json::{json, Value};
 use tower::ServiceExt;
@@ -115,4 +115,39 @@ async fn an_unknown_tenant_maps_to_a_backend_error() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+}
+
+/// `audio`'s multi-tenant handlers resolve their `Registry` the exact same
+/// way every other capability's do -- one focused test confirming that
+/// wiring is right is enough; `tests/audio.rs` already covers the
+/// base64/error-mapping behavior itself against the single-tenant routes.
+#[tokio::test]
+async fn audio_routes_also_resolve_the_right_tenant() {
+    let mut acme = Registry::new();
+    acme.register(
+        "fake",
+        FakeProvider::new("fake")
+            .respond_with_audio(FakeAudioResponse::new(vec![1, 2, 3], "audio/mpeg")),
+    );
+    let tenants = StaticTenantRegistry::new().with_tenant("acme", acme);
+    let app = llmprism_axum::routes_multi_tenant(tenants);
+
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/v1/audio/speech")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "provider": "fake",
+                "model": "tts-1",
+                "input": "hi",
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    request.extensions_mut().insert(RequestContext::new("acme"));
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 }

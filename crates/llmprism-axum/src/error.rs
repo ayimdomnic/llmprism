@@ -36,14 +36,20 @@ impl From<llmprism::Error> for ApiError {
     }
 }
 
+/// The `{"error": {"message": "..."}}` body every error response in this
+/// crate uses -- `pub(crate)` (not exposed publicly) so
+/// [`audio`](crate::audio)'s own error type, which has a failure mode
+/// [`ApiError`] doesn't (invalid base64 in a request body, never reaching a
+/// `llmprism::Error` at all), can still produce byte-for-byte the same
+/// response shape.
 #[derive(Serialize)]
-struct ErrorBody {
-    error: ErrorDetail,
+pub(crate) struct ErrorBody {
+    pub(crate) error: ErrorDetail,
 }
 
 #[derive(Serialize)]
-struct ErrorDetail {
-    message: String,
+pub(crate) struct ErrorDetail {
+    pub(crate) message: String,
 }
 
 impl IntoResponse for ApiError {
