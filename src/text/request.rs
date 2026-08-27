@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use futures::stream::BoxStream;
 
+use crate::approval::ApprovalHandler;
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
@@ -92,6 +93,14 @@ pub struct TextRequest {
     pub stop_when: Vec<Arc<dyn StopCondition>>,
     /// Tools the model is allowed to call during this request. See [`Tool`].
     pub tools: Vec<Arc<dyn Tool>>,
+    /// Consulted before running any tool call whose
+    /// [`Tool::needs_approval`] returns `true`. `None` (the default) means
+    /// every such call is denied automatically -- the same as an
+    /// [`ApprovalHandler`] that always returns `false` -- since a tool that
+    /// asked for approval running unconditionally, just because no handler
+    /// happened to be attached, would defeat the point. See
+    /// [`with_approval_handler`](PendingTextRequest::with_approval_handler).
+    pub approval_handler: Option<Arc<dyn ApprovalHandler>>,
     /// Provider-native tools -- built-in, server-side capabilities like web
     /// search or code execution that the provider itself runs, as opposed to
     /// a [`Tool`] this crate runs on your behalf. Unlike [`Tool`], there's no
@@ -162,6 +171,7 @@ impl TextRequest {
             max_steps: 1,
             stop_when: Vec::new(),
             tools: Vec::new(),
+            approval_handler: None,
             provider_tools: Vec::new(),
             tool_choice: ToolChoice::Auto,
             cache_system_prompt: false,
@@ -321,6 +331,16 @@ impl PendingTextRequest {
     /// want to reuse it across requests.
     pub fn with_tools(mut self, tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Self {
         self.request.tools.extend(tools);
+        self
+    }
+
+    /// Sets the handler consulted before running a tool call whose
+    /// [`Tool::needs_approval`] returns `true`. Has no effect on tools that
+    /// don't opt into approval. See [`ApprovalHandler`] and
+    /// [`TextRequest::approval_handler`] for what happens with no handler
+    /// attached at all.
+    pub fn with_approval_handler(mut self, handler: impl ApprovalHandler + 'static) -> Self {
+        self.request.approval_handler = Some(Arc::new(handler));
         self
     }
 

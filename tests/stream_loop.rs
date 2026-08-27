@@ -139,6 +139,65 @@ async fn streaming_runs_a_tool_call_and_continues_into_a_second_round_trip() {
 }
 
 #[tokio::test]
+async fn a_denied_tool_call_never_runs_during_streaming() {
+    struct ApprovalRequiredEchoTool {
+        parameters: ObjectSchema,
+        call_count: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    }
+
+    #[async_trait]
+    impl Tool for ApprovalRequiredEchoTool {
+        fn name(&self) -> &str {
+            "echo"
+        }
+
+        fn description(&self) -> &str {
+            "Echoes the given message back, but only once approved"
+        }
+
+        fn parameters(&self) -> &ObjectSchema {
+            &self.parameters
+        }
+
+        fn needs_approval(&self) -> bool {
+            true
+        }
+
+        async fn call(&self, _args: Value) -> Result<ToolOutput, ToolError> {
+            self.call_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(ToolOutput::from("echoed"))
+        }
+    }
+
+    let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+    let provider = FakeProvider::new("fake")
+        .respond_with(FakeTextResponse::new("").with_tool_call("call_1", "echo", json!({})))
+        .respond_with(FakeTextResponse::new("done"));
+
+    let mut registry = Registry::new();
+    registry.register("fake", provider);
+
+    let _events: Vec<StreamEvent> = registry
+        .text("fake", "test-model")
+        .unwrap()
+        .with_prompt("say hi")
+        .with_tool(ApprovalRequiredEchoTool {
+            parameters: ObjectSchema::new("parameters"),
+            call_count: call_count.clone(),
+        })
+        .with_max_steps(5)
+        .with_approval_handler(|_call: &llmprism::value_objects::ToolCall| false)
+        .stream()
+        .map(|event| event.unwrap())
+        .collect()
+        .await;
+
+    assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn with_stop_when_ends_the_stream_before_running_the_pending_tool_call() {
     use llmprism::text::Step;
     use llmprism::tool_loop::StopCondition;

@@ -11,6 +11,18 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ### Added
 
+- **Tool-call approval**: `Tool::needs_approval` (default `false`) marks a
+  tool as needing an external decision before it runs; `ApprovalHandler`
+  (attach with `PendingTextRequest::with_approval_handler`) makes that
+  decision, async, so it's free to await a database poll, a channel, or a
+  webhook callback for as long as the request stays open -- no pause/resume
+  machinery needed. A denied call, or one with no handler attached at all,
+  never reaches `Tool::call`; the model sees a normal tool-error result
+  (`ToolError::ApprovalDenied`) instead, the same as any other tool failure.
+  Deliberately doesn't attempt cross-process resumption (a signed token
+  round-tripping through a separate request later) -- a real, harder
+  problem left to an `ApprovalHandler` implementation to build if needed,
+  not something this crate takes on.
 - **Streaming structured output**: `PendingStructuredRequest::stream()` and
   `Provider::stream_structured_once`, yielding `StructuredStreamEvent::PartialObject`
   as the model's JSON reply arrives (repaired into valid JSON via the

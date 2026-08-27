@@ -103,7 +103,9 @@ pub fn stream_text(
                 break;
             }
 
-            let results = execute_tools(&request.tools, &tool_calls).await;
+            let results =
+                execute_tools(&request.tools, &tool_calls, request.approval_handler.as_ref())
+                    .await;
             for result in &results {
                 yield StreamEvent::ToolResult(result.clone());
             }

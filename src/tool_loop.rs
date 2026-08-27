@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use futures::future::join_all;
 
+use crate::approval::ApprovalHandler;
 use crate::error::{Error, ToolError};
 use crate::provider::Provider;
 use crate::text::request::{TextRequest, ToolChoice};
@@ -105,7 +106,12 @@ pub async fn run_text(
             return Ok(TextResponse::from_steps(steps));
         }
 
-        let results = execute_tools(&request.tools, &tool_calls).await;
+        let results = execute_tools(
+            &request.tools,
+            &tool_calls,
+            request.approval_handler.as_ref(),
+        )
+        .await;
 
         request.messages.push(Message::Assistant(AssistantMessage {
             content: text,
@@ -135,7 +141,11 @@ pub async fn run_text(
 /// Crate-visible (rather than private) because [`crate::stream_loop`] drives the
 /// same tool-execution behavior for streaming requests and reuses this directly,
 /// rather than duplicating it.
-pub(crate) async fn execute_tools(tools: &[Arc<dyn Tool>], calls: &[ToolCall]) -> Vec<ToolResult> {
+pub(crate) async fn execute_tools(
+    tools: &[Arc<dyn Tool>],
+    calls: &[ToolCall],
+    approval_handler: Option<&Arc<dyn ApprovalHandler>>,
+) -> Vec<ToolResult> {
     let mut concurrent_idx = Vec::new();
     let mut sequential_idx = Vec::new();
 
@@ -150,7 +160,7 @@ pub(crate) async fn execute_tools(tools: &[Arc<dyn Tool>], calls: &[ToolCall]) -
 
     let concurrent_futures = concurrent_idx
         .iter()
-        .map(|&i| execute_one(tools, &calls[i]));
+        .map(|&i| execute_one(tools, &calls[i], approval_handler));
     for (i, result) in concurrent_idx
         .iter()
         .zip(join_all(concurrent_futures).await)
@@ -159,7 +169,7 @@ pub(crate) async fn execute_tools(tools: &[Arc<dyn Tool>], calls: &[ToolCall]) -
     }
 
     for i in sequential_idx {
-        results[i] = Some(execute_one(tools, &calls[i]).await);
+        results[i] = Some(execute_one(tools, &calls[i], approval_handler).await);
     }
 
     results
@@ -171,9 +181,14 @@ pub(crate) async fn execute_tools(tools: &[Arc<dyn Tool>], calls: &[ToolCall]) -
 }
 
 /// Resolves and runs a single tool call, turning any failure (tool not found, more
-/// than one tool with that name, or the tool's own error) into a [`ToolOutcome`]
-/// that gets reported back to the model, rather than propagated as a hard error.
-async fn execute_one(tools: &[Arc<dyn Tool>], call: &ToolCall) -> ToolResult {
+/// than one tool with that name, the tool's own error, or a denied/missing
+/// approval) into a [`ToolOutcome`] that gets reported back to the model,
+/// rather than propagated as a hard error.
+async fn execute_one(
+    tools: &[Arc<dyn Tool>],
+    call: &ToolCall,
+    approval_handler: Option<&Arc<dyn ApprovalHandler>>,
+) -> ToolResult {
     let matches: Vec<&Arc<dyn Tool>> = tools.iter().filter(|t| t.name() == call.name).collect();
 
     let outcome = match matches.as_slice() {
@@ -183,10 +198,30 @@ async fn execute_one(tools: &[Arc<dyn Tool>], call: &ToolCall) -> ToolResult {
             }
             .to_string(),
         ),
-        [tool] => match tool.call(call.arguments.clone()).await {
-            Ok(output) => ToolOutcome::Output(output),
-            Err(err) => ToolOutcome::Error(err.to_string()),
-        },
+        [tool] => {
+            let approved = if tool.needs_approval() {
+                match approval_handler {
+                    Some(handler) => handler.approve(call).await,
+                    None => false,
+                }
+            } else {
+                true
+            };
+
+            if approved {
+                match tool.call(call.arguments.clone()).await {
+                    Ok(output) => ToolOutcome::Output(output),
+                    Err(err) => ToolOutcome::Error(err.to_string()),
+                }
+            } else {
+                ToolOutcome::Error(
+                    ToolError::ApprovalDenied {
+                        name: call.name.clone(),
+                    }
+                    .to_string(),
+                )
+            }
+        }
         _ => ToolOutcome::Error(
             ToolError::MultipleFound {
                 name: call.name.clone(),
