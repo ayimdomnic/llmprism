@@ -9,6 +9,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+## [llmprism-axum 0.2.0] - 2026-08-27
+
 ### llmprism-axum
 
 - **Audio endpoints**: `POST /v1/audio/speech` (text-to-speech) and `POST
@@ -21,6 +23,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   variants like every other capability. Invalid base64 in a
   transcription request maps to `400`, a failure mode no other route has
   (it never reaches a provider, so it isn't a `llmprism::Error` at all).
+
+## [0.4.0] - 2026-08-27
+
 ### Added
 
 - **Anthropic streaming structured output**: `stream_structured_once` now
