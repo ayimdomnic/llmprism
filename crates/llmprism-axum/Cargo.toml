@@ -7,7 +7,10 @@ authors = ["Soon To Zen <ayimdomnic@outlook.com>"]
 description = "Axum routes for llmprism -- mount every capability as an HTTP API with one line."
 license = "MIT"
 repository = "https://github.com/ayimdomnic/llmprism"
-readme = "../../README.md"
+# This crate's own README (not the workspace root's) -- its crates.io/docs.rs
+# page should lead with an Axum-specific quick start and route table, not the
+# provider-focused content the root README leads with.
+readme = "README.md"
 keywords = ["llm", "ai", "axum", "http", "api"]
 categories = ["api-bindings", "asynchronous", "web-programming::http-server"]
 

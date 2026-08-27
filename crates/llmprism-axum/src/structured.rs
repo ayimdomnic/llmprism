@@ -1,4 +1,43 @@
-//! `POST /v1/structured` and `POST /v1/structured/stream`.
+//! `POST /v1/structured` and `POST /v1/structured/stream` -- ask the model
+//! for a reply matching a JSON Schema you provide, instead of free-form
+//! text.
+//!
+//! # `POST /v1/structured`
+//!
+//! Request body: [`StructuredRequestBody`]. `schema` is a raw JSON Schema
+//! document, passed straight through to
+//! [`ObjectSchema::from_raw_json_schema`] -- the same escape hatch the CLI's
+//! `structured --schema-file` flag already uses, so anything you'd put in
+//! that file works here too. Response: [`StructuredResponse`], the model's
+//! reply already parsed as JSON matching your schema.
+//!
+//! ```json
+//! {
+//!   "provider": "openai",
+//!   "model": "gpt-4o-mini",
+//!   "schema_name": "recipe",
+//!   "schema": {
+//!     "type": "object",
+//!     "properties": { "title": { "type": "string" } },
+//!     "required": ["title"]
+//!   },
+//!   "messages": [
+//!     { "role": "user", "content": [{ "Text": "A pasta recipe" }] }
+//!   ]
+//! }
+//! ```
+//!
+//! # `POST /v1/structured/stream`
+//!
+//! Same request body as above. Response is `text/event-stream`: each
+//! `event: message` carries a JSON-encoded
+//! [`StructuredStreamEvent`](llmprism::structured::StructuredStreamEvent) --
+//! a best-effort partial parse of the reply so far, then one final `End`
+//! with the complete result. A mid-stream failure arrives as `event: error`
+//! instead of breaking the response -- see [`crate`] for why. No
+//! [`RepairStrategy`](llmprism::structured::RepairStrategy) is applied here,
+//! unlike the non-streaming route -- a malformed final reply surfaces as an
+//! error on the stream itself.
 
 use std::sync::Arc;
 
@@ -15,20 +54,35 @@ use serde_json::Value;
 use crate::error::ApiError;
 use crate::sse::sse_stream;
 
+/// The JSON body for `POST /v1/structured` and `POST /v1/structured/stream`.
 #[derive(Deserialize)]
-pub(crate) struct StructuredRequestBody {
-    provider: String,
-    model: String,
-    schema_name: String,
-    schema: Value,
+pub struct StructuredRequestBody {
+    /// Name of the provider registered in the `Registry` this router was
+    /// built from.
+    pub provider: String,
+    /// The model to target.
+    pub model: String,
+    /// A name for the schema (Anthropic uses this as the synthetic tool
+    /// name it forces the model to call; OpenAI's native structured-output
+    /// mode uses it as the schema's `name` field).
+    pub schema_name: String,
+    /// The JSON Schema document the reply must match, passed through to
+    /// [`ObjectSchema::from_raw_json_schema`] as-is.
+    pub schema: Value,
+    /// Zero or more system prompts, sent in order before `messages`.
     #[serde(default)]
-    system_prompts: Vec<String>,
+    pub system_prompts: Vec<String>,
+    /// The conversation so far.
     #[serde(default)]
-    messages: Vec<Message>,
-    max_tokens: Option<u32>,
-    temperature: Option<f32>,
-    top_p: Option<f32>,
-    seed: Option<u64>,
+    pub messages: Vec<Message>,
+    /// Caps the model's reply length, in tokens.
+    pub max_tokens: Option<u32>,
+    /// Sampling temperature; higher is more random.
+    pub temperature: Option<f32>,
+    /// Nucleus sampling threshold.
+    pub top_p: Option<f32>,
+    /// A fixed seed for reproducible output, on providers that support it.
+    pub seed: Option<u64>,
 }
 
 fn build(

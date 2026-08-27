@@ -1,15 +1,33 @@
 //! [`ApiError`] -- turns an [`llmprism::Error`] into an HTTP response, so
 //! every handler can just propagate `?` and get a sensible status code and
 //! JSON body for free.
+//!
+//! | `llmprism::Error` variant | HTTP status |
+//! |---|---|
+//! | `RateLimited` | 429 Too Many Requests |
+//! | `RequestTooLarge` | 413 Payload Too Large |
+//! | `Overloaded` | 503 Service Unavailable |
+//! | `UnknownProvider` | 404 Not Found |
+//! | `Unsupported` | 501 Not Implemented |
+//! | `Config` | 500 Internal Server Error |
+//! | everything else | 502 Bad Gateway |
+//!
+//! The response body is always `{"error": {"message": "..."}}`. A
+//! mid-stream error on `/v1/text/stream` or `/v1/structured/stream` carries
+//! the same `message` text, but as an SSE `event: error` frame instead --
+//! HTTP status can't change after an SSE response has already started, so
+//! streaming routes report failure as data rather than as a failed
+//! response.
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
 
-/// Wraps [`llmprism::Error`] with an [`IntoResponse`] impl. Every handler in
-/// this crate returns `Result<_, ApiError>`, so `?` on any fallible
-/// `llmprism` call just works.
+/// Wraps [`llmprism::Error`] with an [`IntoResponse`] impl. Every
+/// non-streaming handler in this crate returns `Result<_, ApiError>`, so `?`
+/// on any fallible `llmprism` call just works. See the [module docs](self)
+/// for the exact status-code mapping.
 pub struct ApiError(pub llmprism::Error);
 
 impl From<llmprism::Error> for ApiError {

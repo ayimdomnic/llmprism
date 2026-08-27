@@ -1,4 +1,34 @@
-//! `POST /v1/text` and `POST /v1/text/stream`.
+//! `POST /v1/text` and `POST /v1/text/stream` -- text generation, with tool
+//! calling and multi-turn conversation handled the same way
+//! [`PendingTextRequest`](llmprism::text::PendingTextRequest) already does.
+//!
+//! # `POST /v1/text`
+//!
+//! Request body: [`TextRequestBody`]. Response: [`TextResponse`], the same
+//! type [`PendingTextRequest::generate`](llmprism::text::PendingTextRequest::generate)
+//! returns, serialized as-is.
+//!
+//! ```json
+//! {
+//!   "provider": "openai",
+//!   "model": "gpt-4o-mini",
+//!   "system_prompts": ["You are a helpful assistant."],
+//!   "messages": [
+//!     { "role": "user", "content": [{ "Text": "Say hello in one word." }] }
+//!   ],
+//!   "max_tokens": 256,
+//!   "temperature": 0.7
+//! }
+//! ```
+//!
+//! # `POST /v1/text/stream`
+//!
+//! Same request body as above. Response is `text/event-stream`: each event
+//! is `event: message` with a JSON-encoded
+//! [`StreamEvent`](llmprism::StreamEvent) as its data, ending with a
+//! `StreamEvent::StreamEnd`. A failure partway through the model's reply
+//! arrives as `event: error` with a plain-text message instead of breaking
+//! the HTTP response -- see [`crate`] for why.
 
 use std::sync::Arc;
 
@@ -13,20 +43,40 @@ use serde::Deserialize;
 use crate::error::ApiError;
 use crate::sse::sse_stream;
 
+/// The JSON body for `POST /v1/text` and `POST /v1/text/stream`.
+///
+/// Mirrors the `.with_*()` calls on
+/// [`PendingTextRequest`](llmprism::text::PendingTextRequest) -- everything
+/// wire-safe is here; tools, approval handlers, and stop conditions aren't,
+/// since those are Rust trait objects with no JSON representation (see
+/// [`crate`]'s module docs).
 #[derive(Deserialize)]
-pub(crate) struct TextRequestBody {
-    provider: String,
-    model: String,
+pub struct TextRequestBody {
+    /// Name of the provider registered in the `Registry` this router was
+    /// built from (e.g. `"openai"`, `"anthropic"`) -- not a route segment,
+    /// mirroring the CLI's `--provider` flag.
+    pub provider: String,
+    /// The model to target, e.g. `"gpt-4o-mini"`.
+    pub model: String,
+    /// Zero or more system prompts, sent in order before `messages`.
     #[serde(default)]
-    system_prompts: Vec<String>,
+    pub system_prompts: Vec<String>,
+    /// The conversation so far. Reuses [`Message`] directly -- pass the same
+    /// JSON shape you'd get back from a prior non-streaming response's
+    /// history.
     #[serde(default)]
-    messages: Vec<Message>,
-    max_tokens: Option<u32>,
-    temperature: Option<f32>,
-    top_p: Option<f32>,
+    pub messages: Vec<Message>,
+    /// Caps the model's reply length, in tokens.
+    pub max_tokens: Option<u32>,
+    /// Sampling temperature; higher is more random.
+    pub temperature: Option<f32>,
+    /// Nucleus sampling threshold.
+    pub top_p: Option<f32>,
+    /// Strings that stop generation early if the model produces them.
     #[serde(default)]
-    stop_sequences: Vec<String>,
-    seed: Option<u64>,
+    pub stop_sequences: Vec<String>,
+    /// A fixed seed for reproducible output, on providers that support it.
+    pub seed: Option<u64>,
 }
 
 fn build(

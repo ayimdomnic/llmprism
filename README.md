@@ -82,7 +82,7 @@ A few notes on the gaps:
 
 ```toml
 [dependencies]
-llmprism = { version = "0.1", features = ["openai", "anthropic"] }
+llmprism = { version = "0.2", features = ["openai", "anthropic"] }
 ```
 
 Nothing is enabled by default. Every provider lives behind its own Cargo feature
@@ -125,6 +125,45 @@ the providers you actually use. Turn on everything with the `full` feature.
 Run `cargo doc --open --all-features` for the full reference -- every public type
 has a plain-language explanation of what it's for and, where it helps, a short
 example.
+
+## Framework integrations
+
+Building an actual API server on top of `llmprism`? You don't have to
+hand-wire routes yourself. [`llmprism-axum`](crates/llmprism-axum) is a
+companion crate that turns a `Registry` into a working Axum `Router` in one
+line:
+
+```rust,ignore
+use llmprism::Registry;
+
+let registry = Registry::from_env();
+let app = llmprism_axum::routes(registry); // an ordinary axum::Router
+```
+
+That gets you `POST /v1/text` (plus a `/v1/text/stream` SSE variant),
+`/v1/structured` (+ `/v1/structured/stream`), `/v1/moderation`,
+`/v1/embeddings`, `/v1/rerank`, and `/v1/images` -- each taking the same
+shape of request `PendingXRequest`'s `.with_*()` builders accept, and
+returning the exact response type the matching `Registry` method would. The
+`Router` it returns composes normally: `.merge()` it into a bigger
+application, layer your own `tower` middleware on top (auth, rate limiting,
+tracing), or serve it as-is.
+
+Deliberately not included: tool calling, approval handling, and MCP have no
+JSON wire representation (a `Tool` is arbitrary server-side code), so those
+stay something your server configures directly against `Registry` rather
+than something a client can request; audio endpoints are a tracked
+follow-up. See [`crates/llmprism-axum`](crates/llmprism-axum)'s own README
+for the full route reference, worked `curl` examples, and how to depend on
+it (it isn't on crates.io yet -- see that README for why and how to pull it
+from git in the meantime).
+
+This is Phase 1 of a broader plan -- persistence, auth/multi-tenancy, and
+adapters for other frameworks (Actix-web, Rocket) are what's next. See
+[ROADMAP.md](ROADMAP.md) for the full picture and the reasoning behind each
+phase, including why the core `llmprism` crate itself will never gain a
+hard dependency on any web framework -- adapters are separate, optional
+crates so a consumer who wants neither pays for neither.
 
 ## Examples
 

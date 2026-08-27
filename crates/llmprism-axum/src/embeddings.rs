@@ -1,4 +1,12 @@
-//! `POST /v1/embeddings`.
+//! `POST /v1/embeddings` -- turn text into numeric vectors for similarity
+//! search, clustering, or retrieval.
+//!
+//! Request body: [`EmbeddingsRequestBody`]. Response: [`EmbeddingsResponse`],
+//! one embedding per input, in order.
+//!
+//! ```json
+//! { "provider": "openai", "model": "text-embedding-3-small", "input": ["hello", "world"] }
+//! ```
 
 use std::sync::Arc;
 
@@ -10,12 +18,20 @@ use serde::Deserialize;
 
 use crate::error::ApiError;
 
+/// The JSON body for `POST /v1/embeddings`.
 #[derive(Deserialize)]
-pub(crate) struct EmbeddingsRequestBody {
-    provider: String,
-    model: String,
-    input: Vec<String>,
-    dimensions: Option<u32>,
+pub struct EmbeddingsRequestBody {
+    /// Name of the provider registered in the `Registry` this router was
+    /// built from.
+    pub provider: String,
+    /// The model to target.
+    pub model: String,
+    /// The pieces of text to embed -- one embedding comes back per entry,
+    /// in the same order.
+    pub input: Vec<String>,
+    /// Requests a shorter output vector than the model's default, for
+    /// models that support it.
+    pub dimensions: Option<u32>,
 }
 
 pub(crate) async fn embeddings(

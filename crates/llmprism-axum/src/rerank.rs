@@ -1,4 +1,17 @@
-//! `POST /v1/rerank`.
+//! `POST /v1/rerank` -- given a query and a list of documents, score and
+//! sort them by relevance.
+//!
+//! Request body: [`RerankRequestBody`]. Response: [`RerankResponse`], every
+//! document scored and sorted (most relevant first).
+//!
+//! ```json
+//! {
+//!   "provider": "voyageai",
+//!   "model": "rerank-2",
+//!   "query": "What is the capital of France?",
+//!   "documents": ["Paris is the capital of France.", "Berlin is the capital of Germany."]
+//! }
+//! ```
 
 use std::sync::Arc;
 
@@ -10,15 +23,25 @@ use serde::Deserialize;
 
 use crate::error::ApiError;
 
+/// The JSON body for `POST /v1/rerank`.
 #[derive(Deserialize)]
-pub(crate) struct RerankRequestBody {
-    provider: String,
-    model: String,
-    query: String,
+pub struct RerankRequestBody {
+    /// Name of the provider registered in the `Registry` this router was
+    /// built from.
+    pub provider: String,
+    /// The model to target.
+    pub model: String,
+    /// The query every document is scored against.
+    pub query: String,
+    /// The candidate documents to score and sort.
     #[serde(default)]
-    documents: Vec<String>,
-    top_k: Option<u32>,
-    return_documents: Option<bool>,
+    pub documents: Vec<String>,
+    /// Keeps only the `top_k` most relevant documents in the response,
+    /// instead of every document just sorted.
+    pub top_k: Option<u32>,
+    /// Asks the provider to echo each document's own text back in the
+    /// response.
+    pub return_documents: Option<bool>,
 }
 
 pub(crate) async fn rerank(

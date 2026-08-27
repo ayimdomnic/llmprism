@@ -1,4 +1,12 @@
-//! `POST /v1/images`.
+//! `POST /v1/images` -- image generation.
+//!
+//! Request body: [`ImagesRequestBody`]. Response: [`ImagesResponse`], one or
+//! more generated images, each either a URL or base64-encoded data
+//! depending on what the provider returns.
+//!
+//! ```json
+//! { "provider": "openai", "model": "dall-e-3", "prompt": "a cat astronaut", "count": 1 }
+//! ```
 
 use std::sync::Arc;
 
@@ -10,15 +18,28 @@ use serde::Deserialize;
 
 use crate::error::ApiError;
 
+/// The JSON body for `POST /v1/images`.
 #[derive(Deserialize)]
-pub(crate) struct ImagesRequestBody {
-    provider: String,
-    model: String,
-    prompt: String,
-    count: Option<u32>,
-    size: Option<String>,
-    quality: Option<String>,
-    style: Option<String>,
+pub struct ImagesRequestBody {
+    /// Name of the provider registered in the `Registry` this router was
+    /// built from.
+    pub provider: String,
+    /// The model to target.
+    pub model: String,
+    /// A plain-language description of the image to generate.
+    pub prompt: String,
+    /// Requests `n` images instead of the provider's default.
+    pub count: Option<u32>,
+    /// Requests a specific size (e.g. `"1024x1024"`) instead of the
+    /// provider's default. Valid values depend on the model.
+    pub size: Option<String>,
+    /// Requests a specific quality (e.g. `"hd"`) instead of the provider's
+    /// default. Valid values depend on the model.
+    pub quality: Option<String>,
+    /// Requests a specific style (e.g. `"vivid"`) instead of the provider's
+    /// default. Valid values depend on the model; most models have no
+    /// equivalent concept at all.
+    pub style: Option<String>,
 }
 
 pub(crate) async fn images(
