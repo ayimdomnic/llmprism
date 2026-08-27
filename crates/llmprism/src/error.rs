@@ -167,11 +167,13 @@ pub enum Error {
 
     /// A backend outside this crate's own control failed -- a
     /// [`ConversationStore`](crate::persistence::ConversationStore) that
-    /// couldn't load or save conversation history, or (in a future release)
-    /// a tenant-resolution backend that couldn't resolve a tenant.
-    /// `message` is whatever the implementation reported. Unconditional
-    /// (not feature-gated): unlike [`Error::Http`], a store backend has no
-    /// reason to depend on this crate's own `http` feature.
+    /// couldn't load or save conversation history, a
+    /// [`TenantRegistry`](crate::tenancy::TenantRegistry) that couldn't
+    /// resolve a tenant, or a [`UsageSink`](crate::tenancy::UsageSink) that
+    /// couldn't record usage. `message` is whatever the implementation
+    /// reported. Unconditional (not feature-gated): unlike [`Error::Http`],
+    /// none of these backends have any reason to depend on this crate's
+    /// own `http` feature.
     #[error("{message}")]
     Store { message: String },
 }
