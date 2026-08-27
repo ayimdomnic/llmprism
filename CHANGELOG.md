@@ -72,6 +72,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `license = "MIT"` is already set) -- the SPDX `license = "MIT"` field
   crates.io reads is untouched, and the real file is still right there in
   the repository for anyone who wants to read it.
+- `scripts/release.sh` now releases one crate at a time by name
+  (`scripts/release.sh <crate> <version>`) instead of assuming there's only
+  ever one crate to release, now that the workspace has more than one.
+  `llmprism` keeps its historical unprefixed tag/CHANGELOG heading
+  (`vX.Y.Z`, `## [X.Y.Z]`) for continuity; every other crate gets its name
+  in both (`<crate>-vX.Y.Z`, `## [<crate> X.Y.Z]`). Not a change to any
+  published crate's behavior -- internal release tooling only.
 
 ## [0.2.0] - 2026-08-26
 
