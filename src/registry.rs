@@ -448,6 +448,11 @@ impl Registry {
     /// env var, and so on).
     #[cfg(feature = "http")]
     pub fn from_env() -> Self {
+        // `mut` goes unused with `http` enabled but no actual provider
+        // feature on top of it -- every block below is `#[cfg]`-gated on one,
+        // so there's nothing to register in that combination. Real (if
+        // pointless) to build; not worth a warning.
+        #[allow(unused_mut)]
         let mut registry = Self::new();
 
         #[cfg(feature = "openai")]

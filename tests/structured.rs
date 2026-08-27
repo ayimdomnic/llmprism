@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
+use futures::StreamExt;
 use llmprism::schema::{BooleanSchema, ObjectSchema, Schema, StringSchema};
+use llmprism::structured::StructuredStreamEvent;
 use llmprism::testing::{FakeProvider, FakeStructuredResponse};
 use llmprism::value_objects::FinishReason;
 use llmprism::Registry;
@@ -62,6 +64,39 @@ async fn structured_request_records_what_was_sent() {
     assert_eq!(recorded[0].model, "test-model");
     assert_eq!(recorded[0].schema.name, "review");
     assert_eq!(recorded[0].system_prompts, vec!["Be concise.".to_string()]);
+}
+
+#[tokio::test]
+async fn structured_request_streams_a_partial_object_then_ends() {
+    let provider = FakeProvider::new("fake").respond_with_structured(FakeStructuredResponse::new(
+        json!({"summary": "Great crate.", "recommended": true}),
+    ));
+
+    let mut registry = Registry::new();
+    registry.register("fake", provider);
+
+    let mut stream = registry
+        .structured("fake", "test-model", review_schema())
+        .unwrap()
+        .with_prompt("Review this crate.")
+        .stream();
+
+    let mut saw_partial = false;
+    let mut end_response = None;
+
+    while let Some(event) = stream.next().await {
+        match event.unwrap() {
+            StructuredStreamEvent::PartialObject { data } => {
+                assert_eq!(data["summary"], "Great crate.");
+                saw_partial = true;
+            }
+            StructuredStreamEvent::End { response } => end_response = Some(response),
+        }
+    }
+
+    assert!(saw_partial, "expected at least one PartialObject event");
+    let response = end_response.expect("stream should end with a StructuredStreamEvent::End");
+    assert_eq!(response.data["recommended"], true);
 }
 
 #[tokio::test]

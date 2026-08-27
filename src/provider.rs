@@ -12,7 +12,7 @@ use crate::images::{ImagesRequest, ImagesResponse};
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::rerank::{RerankRequest, RerankResponse};
 use crate::stream_event::StreamEvent;
-use crate::structured::{StructuredRequest, StructuredResponse};
+use crate::structured::{StructuredRequest, StructuredResponse, StructuredStreamEvent};
 use crate::text::{Step, TextRequest};
 
 /// A single LLM backend -- OpenAI, Anthropic, or any other service you connect
@@ -121,6 +121,24 @@ pub trait Provider: Send + Sync {
     async fn structured(&self, request: StructuredRequest) -> Result<StructuredResponse, Error> {
         let _ = request;
         Err(Error::unsupported(self.name(), "structured"))
+    }
+
+    /// The streaming counterpart to [`structured`](Self::structured): instead
+    /// of waiting for the whole reply, returns a stream that yields
+    /// [`StructuredStreamEvent::PartialObject`]s as the model's JSON output
+    /// arrives, ending with exactly one
+    /// [`StructuredStreamEvent::End`]. Like `structured`, this is always
+    /// exactly one round trip -- there's no separate loop layer above it.
+    ///
+    /// Not every provider that supports [`structured`](Self::structured)
+    /// necessarily supports this too; see [`crate::structured`] for which
+    /// ones do.
+    async fn stream_structured_once(
+        &self,
+        request: &StructuredRequest,
+    ) -> Result<BoxStream<'static, Result<StructuredStreamEvent, Error>>, Error> {
+        let _ = request;
+        Err(Error::unsupported(self.name(), "stream_structured"))
     }
 
     /// Checks one or more pieces of text against the provider's content-safety
