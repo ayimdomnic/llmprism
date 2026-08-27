@@ -46,6 +46,7 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Json;
 use llmprism::schema::ObjectSchema;
 use llmprism::structured::StructuredResponse;
+use llmprism::tenancy::TenantRegistry;
 use llmprism::value_objects::Message;
 use llmprism::Registry;
 use serde::Deserialize;
@@ -53,6 +54,7 @@ use serde_json::Value;
 
 use crate::error::ApiError;
 use crate::sse::sse_stream;
+use crate::tenant::TenantContext;
 
 /// The JSON body for `POST /v1/structured` and `POST /v1/structured/stream`.
 #[derive(Deserialize)]
@@ -122,6 +124,26 @@ pub(crate) async fn structured_stream(
     State(registry): State<Arc<Registry>>,
     Json(body): Json<StructuredRequestBody>,
 ) -> Result<Sse<impl futures::Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
+    let stream = build(&registry, body)?.stream();
+    Ok(Sse::new(sse_stream(stream)).keep_alive(KeepAlive::default()))
+}
+
+pub(crate) async fn structured_multi_tenant(
+    State(tenants): State<Arc<dyn TenantRegistry>>,
+    TenantContext(context): TenantContext,
+    Json(body): Json<StructuredRequestBody>,
+) -> Result<Json<StructuredResponse>, ApiError> {
+    let registry = tenants.resolve(&context).await?;
+    let response = build(&registry, body)?.generate().await?;
+    Ok(Json(response))
+}
+
+pub(crate) async fn structured_stream_multi_tenant(
+    State(tenants): State<Arc<dyn TenantRegistry>>,
+    TenantContext(context): TenantContext,
+    Json(body): Json<StructuredRequestBody>,
+) -> Result<Sse<impl futures::Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
+    let registry = tenants.resolve(&context).await?;
     let stream = build(&registry, body)?.stream();
     Ok(Sse::new(sse_stream(stream)).keep_alive(KeepAlive::default()))
 }

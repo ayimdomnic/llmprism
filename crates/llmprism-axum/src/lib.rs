@@ -59,11 +59,19 @@
 //!   implemented yet -- binary request/response bodies need a deliberate
 //!   design choice (base64 vs. multipart vs. raw bytes) that didn't fit
 //!   this crate's first pass. See `ROADMAP.md` in the workspace root for
-//!   what's planned next: audio, persistence
-//!   (a `ConversationStore`/`PersistenceMiddleware` pair, framework-agnostic
-//!   and reusable by every adapter), auth context and multi-tenancy, and
-//!   additional framework adapters (Actix-web, Rocket) once this crate's
-//!   pattern is proven out.
+//!   what's tracked as a follow-up.
+//!
+//! # Multi-tenancy
+//!
+//! [`routes`] serves one fixed [`Registry`] -- the common case. An
+//! application serving several tenants (different API keys, different
+//! allowed providers, different default models per tenant) from the same
+//! process uses [`routes_multi_tenant`] instead: it resolves the
+//! `Registry` to use *per request*, from a
+//! [`RequestContext`](llmprism::tenancy::RequestContext) your own auth
+//! middleware attaches. This crate never verifies identity itself -- see
+//! [`tenant::TenantContext`] for exactly what it expects your middleware
+//! to have already done.
 //!
 //! # Testing your own code against this
 //!
@@ -71,7 +79,7 @@
 //! pass to [`routes`] and drive it with `tower::ServiceExt::oneshot` --
 //! no real network socket needed. See this crate's own
 //! `tests/routes.rs` for worked examples covering every route, including
-//! the SSE ones.
+//! the SSE ones, and `tests/multi_tenant.rs` for [`routes_multi_tenant`].
 
 pub mod embeddings;
 pub mod error;
@@ -80,12 +88,14 @@ pub mod moderation;
 pub mod rerank;
 mod sse;
 pub mod structured;
+pub mod tenant;
 pub mod text;
 
 use std::sync::Arc;
 
 use axum::routing::post;
 use axum::Router;
+use llmprism::tenancy::TenantRegistry;
 use llmprism::Registry;
 
 /// Builds a [`Router`] exposing every `llmprism` capability `registry` has
@@ -102,4 +112,36 @@ pub fn routes(registry: Registry) -> Router {
         .route("/v1/rerank", post(rerank::rerank))
         .route("/v1/images", post(images::images))
         .with_state(Arc::new(registry))
+}
+
+/// Builds a [`Router`] with the same routes as [`routes`], but resolving a
+/// per-request [`Registry`] from `tenant_registry` instead of serving one
+/// fixed `Registry` -- see the [module docs](self#multi-tenancy).
+///
+/// Every route requires a [`tenant::TenantContext`] to already be
+/// extractable from the request (i.e. your own auth middleware must run
+/// before these routes and insert a
+/// [`RequestContext`](llmprism::tenancy::RequestContext) into the
+/// request's extensions) -- a request with none rejects with `401`. A
+/// tenant `tenant_registry.resolve` doesn't recognize (the
+/// `Error::Store` [`llmprism::tenancy::StaticTenantRegistry`] returns for
+/// one) maps through [`error::ApiError`] to `502`, the same as any other
+/// backend failure that isn't one of `Error`'s more specific variants --
+/// deliberately not `404`, since `Error::Store` also covers a
+/// `ConversationStore` backend genuinely failing, which is a server
+/// problem, not a "this resource doesn't exist" one.
+pub fn routes_multi_tenant(tenant_registry: impl TenantRegistry + 'static) -> Router {
+    Router::new()
+        .route("/v1/text", post(text::text_multi_tenant))
+        .route("/v1/text/stream", post(text::text_stream_multi_tenant))
+        .route("/v1/structured", post(structured::structured_multi_tenant))
+        .route(
+            "/v1/structured/stream",
+            post(structured::structured_stream_multi_tenant),
+        )
+        .route("/v1/moderation", post(moderation::moderation_multi_tenant))
+        .route("/v1/embeddings", post(embeddings::embeddings_multi_tenant))
+        .route("/v1/rerank", post(rerank::rerank_multi_tenant))
+        .route("/v1/images", post(images::images_multi_tenant))
+        .with_state(Arc::new(tenant_registry) as Arc<dyn TenantRegistry>)
 }

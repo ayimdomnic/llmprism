@@ -35,6 +35,7 @@ use std::sync::Arc;
 use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::Json;
+use llmprism::tenancy::TenantRegistry;
 use llmprism::text::TextResponse;
 use llmprism::value_objects::Message;
 use llmprism::Registry;
@@ -42,6 +43,7 @@ use serde::Deserialize;
 
 use crate::error::ApiError;
 use crate::sse::sse_stream;
+use crate::tenant::TenantContext;
 
 /// The JSON body for `POST /v1/text` and `POST /v1/text/stream`.
 ///
@@ -118,6 +120,26 @@ pub(crate) async fn text_stream(
     State(registry): State<Arc<Registry>>,
     Json(body): Json<TextRequestBody>,
 ) -> Result<Sse<impl futures::Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
+    let stream = build(&registry, body)?.stream();
+    Ok(Sse::new(sse_stream(stream)).keep_alive(KeepAlive::default()))
+}
+
+pub(crate) async fn text_multi_tenant(
+    State(tenants): State<Arc<dyn TenantRegistry>>,
+    TenantContext(context): TenantContext,
+    Json(body): Json<TextRequestBody>,
+) -> Result<Json<TextResponse>, ApiError> {
+    let registry = tenants.resolve(&context).await?;
+    let response = build(&registry, body)?.generate().await?;
+    Ok(Json(response))
+}
+
+pub(crate) async fn text_stream_multi_tenant(
+    State(tenants): State<Arc<dyn TenantRegistry>>,
+    TenantContext(context): TenantContext,
+    Json(body): Json<TextRequestBody>,
+) -> Result<Sse<impl futures::Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError> {
+    let registry = tenants.resolve(&context).await?;
     let stream = build(&registry, body)?.stream();
     Ok(Sse::new(sse_stream(stream)).keep_alive(KeepAlive::default()))
 }

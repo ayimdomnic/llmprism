@@ -128,6 +128,12 @@ the providers you actually use. Turn on everything with the `full` feature.
   the newest turn instead of replaying the whole conversation every time.
   Ships with an in-memory reference `ConversationStore`; a real backend
   (Postgres, Redis, ...) is a small trait impl away.
+- **`tenancy::TenantRegistry`/`UsageTrackingMiddleware`** are the hooks for
+  serving several tenants from one process -- resolve a `RequestContext`
+  (tenant id, user id, free-form claims your own auth attaches) to the
+  `Registry` that tenant should use, and record per-tenant token usage after
+  every round trip. This crate never verifies identity itself; that stays
+  your application's own auth.
 
 Run `cargo doc --open --all-features` for the full reference -- every public type
 has a plain-language explanation of what it's for and, where it helps, a short
@@ -165,12 +171,17 @@ for the full route reference, worked `curl` examples, and how to depend on
 it (it isn't on crates.io yet -- see that README for why and how to pull it
 from git in the meantime).
 
-This is Phase 1 of a broader plan -- persistence, auth/multi-tenancy, and
-adapters for other frameworks (Actix-web, Rocket) are what's next. See
-[ROADMAP.md](ROADMAP.md) for the full picture and the reasoning behind each
-phase, including why the core `llmprism` crate itself will never gain a
-hard dependency on any web framework -- adapters are separate, optional
-crates so a consumer who wants neither pays for neither.
+Serving several tenants from one process? `llmprism_axum::routes_multi_tenant(tenant_registry)`
+resolves the `Registry` to use *per request*, from a `tenancy::RequestContext`
+your own auth middleware attaches -- see the `persistence`/`tenancy` bullets
+above and that crate's own README for the details. This crate never
+verifies identity itself; that's squarely your application's job.
+
+Adapters for other frameworks (Actix-web, Rocket) are what's left on the
+roadmap. See [ROADMAP.md](ROADMAP.md) for the full picture and the
+reasoning behind each phase, including why the core `llmprism` crate itself
+will never gain a hard dependency on any web framework -- adapters are
+separate, optional crates so a consumer who wants neither pays for neither.
 
 ## Examples
 

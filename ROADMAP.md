@@ -90,22 +90,26 @@ pub trait ConversationStore: Send + Sync {
 }
 ```
 
-- **Where it plugs in:** a `PersistenceMiddleware<S: ConversationStore>`
-  implementing `ProviderMiddleware` -- load history before a call, merge it
-  with the incoming request's messages, run the request, save the updated
-  history after. This is exactly what the middleware seam added earlier
-  this year was for: no changes to `Provider`, `tool_loop`, or
-  `stream_loop` are needed at all.
-- **What ships where:** the `ConversationStore` trait and an in-memory
-  reference implementation ship in `llmprism` core (useful on its own for
-  tests and single-process apps); real backends (Postgres, SQLite, Redis)
-  ship as separate follow-up crates (`llmprism-store-postgres`, etc.), each
-  a thin `ConversationStore` impl with no reason to force that database
-  driver onto everyone else.
-- **Size:** small for the trait and in-memory impl; each backend crate is
-  its own small, independent piece of work.
-- **Non-goal:** no commitment yet to which database backends ship first --
-  that's demand-driven, not decided by this roadmap.
+- **Where it plugs in:** `PersistenceMiddleware<S: ConversationStore>`
+  implements `ProviderMiddleware` -- loads history before a call, merges it
+  with the incoming request's messages, runs the request, saves the
+  updated history after. Confirmed the middleware seam added earlier this
+  year was enough on its own: no changes to `Provider`, `tool_loop`, or
+  `stream_loop` were needed. The one subtlety worth calling out for anyone
+  extending this: `Provider::text_step`/`stream_text_once` are called once
+  per round trip of a multi-step tool-calling loop, not once per
+  `generate()`/`stream()` call, so the *save* specifically has to be gated
+  on the round trip that actually ends the call (via `finish_reason`) --
+  otherwise a tool-calling conversation would persist once per step instead
+  of once per call.
+- **What shipped where:** the `ConversationStore` trait and an in-memory
+  reference implementation, `InMemoryConversationStore`, shipped in
+  `llmprism` core (useful on its own for tests and single-process apps).
+  Real backends (Postgres, SQLite, Redis) are still meant to ship as
+  separate follow-up crates, each a thin `ConversationStore` impl -- none
+  have shipped yet, and which one comes first is demand-driven, not
+  decided here.
+- **Non-goal:** no commitment yet to which database backends ship first.
 
 ## Phase 3 — Auth context & multi-tenancy
 
@@ -113,25 +117,32 @@ Request-scoped identity, threaded through to per-tenant provider/key
 resolution and usage tracking -- again via the middleware seam, not new
 core plumbing:
 
-- **Auth context:** an Axum extractor (`llmprism-axum`) that pulls an
-  identity (a JWT claim, a session, a header) into a typed
-  `RequestContext { tenant_id, user_id, .. }`, made available to
-  middleware via request extensions -- the same pattern `tower`/Axum
-  middleware already uses for this, not a new mechanism.
-- **Multi-tenancy:** a `TenantRegistry` resolving `tenant_id` to the right
-  `Registry` (different API keys, different default models, different
-  allowed providers per tenant) instead of one process-wide
-  `Registry::from_env()`. A `TenantMiddleware` reads the request context and
-  picks the right `Registry` before dispatching -- consistent with how
-  persistence hooks in.
-- **Usage tracking:** a natural extension of the same middleware -- record
-  token usage per tenant after each call, for quota enforcement or billing,
-  without touching core.
-- **Size:** medium -- the extractor and `TenantRegistry` are
-  straightforward; getting the ergonomics right (so wiring three
-  middlewares together doesn't feel like framework soup) is the real work.
+- **Auth context:** `llmprism::tenancy::RequestContext` (`tenant_id`,
+  `user_id`, free-form `claims`) plus an Axum extractor,
+  `llmprism_axum::tenant::TenantContext`, that reads one back out of the
+  request's extensions -- the same pattern `tower`/Axum middleware already
+  uses for this. This crate never establishes identity itself: an
+  application's own auth (a `tower::Layer` or `axum::middleware::from_fn`
+  verifying a JWT, session, or API key) is what actually inserts a
+  `RequestContext` before these routes run.
+- **Multi-tenancy:** `llmprism::tenancy::TenantRegistry` resolves a
+  `RequestContext` to the right `Registry` (different API keys, different
+  default models, different allowed providers per tenant) instead of one
+  process-wide `Registry::from_env()`, with a `StaticTenantRegistry`
+  reference implementation for a fixed, startup-time set of tenants.
+  `llmprism_axum::routes_multi_tenant` picks the right `Registry` per
+  request before dispatching to the same handlers `routes` uses --
+  consistent with how persistence hooks in.
+- **Usage tracking:** `UsageSink`/`UsageTrackingMiddleware` record token
+  usage per tenant after every round trip, for quota enforcement or billing
+  -- a natural extension of the same middleware pattern, needing no new
+  core plumbing. Unlike persistence, this middleware is constructed once
+  per tenant (wrapped into that tenant's own `Registry`, already knowing
+  its `tenant_id`) rather than reading one from the request.
 - **Non-goal:** this phase doesn't include a hosted quota/billing service --
-  just the hooks an application would build one on top of.
+  just the hooks an application builds one on top of, and it doesn't
+  include this crate verifying identity itself (no JWT/session dependency
+  was added anywhere).
 
 ## Phase 4 — Additional frameworks
 
