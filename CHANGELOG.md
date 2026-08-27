@@ -9,6 +9,28 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+Not yet published to crates.io. See `llmprism-axum`'s own README for
+current status and how to depend on it from git in the meantime.
+
+### llmprism-axum
+
+- **`llmprism-axum`** (new workspace crate, `ROADMAP.md`'s Phase 1): mounts
+  every capability as an HTTP API in one line --
+  `llmprism_axum::routes(registry)` returns an `axum::Router` with `POST
+  /v1/text`, `/v1/text/stream` (SSE), `/v1/structured`,
+  `/v1/structured/stream` (SSE), `/v1/moderation`, `/v1/embeddings`,
+  `/v1/rerank`, and `/v1/images`. Tool calling, approval handling, MCP, and
+  audio endpoints are deliberately out of scope for this first pass -- see
+  `ROADMAP.md` for why.
+- **Multi-tenancy** (`ROADMAP.md`'s Phase 3): `TenantContext`, an Axum
+  extractor reading a `llmprism::tenancy::RequestContext` an application's
+  own auth middleware already inserted into the request, and
+  `routes_multi_tenant(tenant_registry)`, resolving the `Registry` to use
+  per request instead of serving one fixed one. This crate never verifies
+  identity itself.
+
+## [0.3.0] - 2026-08-27
+
 ### Added
 
 - **Tool-call approval**: `Tool::needs_approval` (default `false`) marks a
@@ -33,17 +55,6 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `input_json_delta` events on a forced tool call) is a documented gap, not
   built yet. `FakeProvider` also gained `stream_structured_once`, reusing the
   existing `respond_with_structured` fixture.
-- **`llmprism-axum`** (new workspace crate, `ROADMAP.md`'s Phase 1): mounts
-  every capability as an HTTP API in one line --
-  `llmprism_axum::routes(registry)` returns an `axum::Router` with `POST
-  /v1/text`, `/v1/text/stream` (SSE), `/v1/structured`,
-  `/v1/structured/stream` (SSE), `/v1/moderation`, `/v1/embeddings`,
-  `/v1/rerank`, and `/v1/images`. Tool calling, approval handling, MCP, and
-  audio endpoints are deliberately out of scope for this first pass -- see
-  `ROADMAP.md` for why. Not yet published to crates.io: its
-  `/v1/structured/stream` route depends on `PendingStructuredRequest::stream`,
-  which landed above in this same `[Unreleased]` section and hasn't shipped
-  in a core `llmprism` release yet.
 - **Conversation persistence** (`ROADMAP.md`'s Phase 2): `ConversationStore`
   (`load`/`save` a message history by an opaque id) plus an in-memory
   reference implementation, `InMemoryConversationStore`. Attach
@@ -60,12 +71,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `RequestContext` to the `Registry` that tenant should use) with a
   `StaticTenantRegistry` reference implementation, and `UsageSink` /
   `UsageTrackingMiddleware` for recording per-tenant token usage after every
-  round trip. This crate never verifies identity itself -- these are hooks
-  an application's own auth wires into, not a JWT/session implementation.
-  `llmprism-axum` gains a `TenantContext` extractor (reads a `RequestContext`
-  the application's own auth middleware already inserted into the request)
-  and `routes_multi_tenant`, resolving the `Registry` per request instead of
-  serving one fixed one.
+  round trip, reusing `Error::Store` (above) for an unresolvable tenant.
+  This crate never verifies identity itself -- these are hooks an
+  application's own auth wires into, not a JWT/session implementation. See
+  `llmprism-axum`'s own changelog entry for the Axum-side extractor and
+  multi-tenant router built on top of this.
 
 ### Changed
 
