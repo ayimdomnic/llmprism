@@ -121,6 +121,13 @@ the providers you actually use. Turn on everything with the `full` feature.
   from outside its own implementation -- logging, caching, redaction, a
   default system prompt, or short-circuiting a call entirely. Attach one with
   `Registry::wrap`; middlewares compose.
+- **`persistence::PersistenceMiddleware`** (built on `ProviderMiddleware`)
+  saves a conversation's message history after each call and reloads it
+  before the next one, keyed by an opaque id you set with
+  `PendingTextRequest::with_conversation_id` -- so a caller only has to send
+  the newest turn instead of replaying the whole conversation every time.
+  Ships with an in-memory reference `ConversationStore`; a real backend
+  (Postgres, Redis, ...) is a small trait impl away.
 
 Run `cargo doc --open --all-features` for the full reference -- every public type
 has a plain-language explanation of what it's for and, where it helps, a short

@@ -143,6 +143,7 @@ pub mod error;
 pub mod images;
 pub mod middleware;
 pub mod moderation;
+pub mod persistence;
 pub mod provider;
 pub mod registry;
 pub mod rerank;

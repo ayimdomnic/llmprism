@@ -44,6 +44,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `/v1/structured/stream` route depends on `PendingStructuredRequest::stream`,
   which landed above in this same `[Unreleased]` section and hasn't shipped
   in a core `llmprism` release yet.
+- **Conversation persistence** (`ROADMAP.md`'s Phase 2): `ConversationStore`
+  (`load`/`save` a message history by an opaque id) plus an in-memory
+  reference implementation, `InMemoryConversationStore`. Attach
+  `PersistenceMiddleware::new(store)` via `Registry::wrap` and opt individual
+  requests in with `PendingTextRequest::with_conversation_id`; a request with
+  no id set passes through untouched. Works for both `generate()` and
+  `stream()`, and persists exactly once per call even across a multi-step
+  tool-calling loop (not once per round trip). A failed load/save propagates
+  as the new `Error::Store` rather than being silently swallowed -- real
+  database-backed stores (Postgres, Redis, ...) are meant to ship as their
+  own separate crates, not bundled here.
 
 ### Changed
 
