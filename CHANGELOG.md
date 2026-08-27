@@ -33,6 +33,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `input_json_delta` events on a forced tool call) is a documented gap, not
   built yet. `FakeProvider` also gained `stream_structured_once`, reusing the
   existing `respond_with_structured` fixture.
+- **`llmprism-axum`** (new workspace crate, `ROADMAP.md`'s Phase 1): mounts
+  every capability as an HTTP API in one line --
+  `llmprism_axum::routes(registry)` returns an `axum::Router` with `POST
+  /v1/text`, `/v1/text/stream` (SSE), `/v1/structured`,
+  `/v1/structured/stream` (SSE), `/v1/moderation`, `/v1/embeddings`,
+  `/v1/rerank`, and `/v1/images`. Tool calling, approval handling, MCP, and
+  audio endpoints are deliberately out of scope for this first pass -- see
+  `ROADMAP.md` for why. Not yet published to crates.io: its
+  `/v1/structured/stream` route depends on `PendingStructuredRequest::stream`,
+  which landed above in this same `[Unreleased]` section and hasn't shipped
+  in a core `llmprism` release yet.
 
 ### Changed
 
