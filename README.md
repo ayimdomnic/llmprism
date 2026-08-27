@@ -155,19 +155,20 @@ let app = llmprism_axum::routes(registry); // an ordinary axum::Router
 
 That gets you `POST /v1/text` (plus a `/v1/text/stream` SSE variant),
 `/v1/structured` (+ `/v1/structured/stream`), `/v1/moderation`,
-`/v1/embeddings`, `/v1/rerank`, and `/v1/images` -- each taking the same
-shape of request `PendingXRequest`'s `.with_*()` builders accept, and
-returning the exact response type the matching `Registry` method would. The
-`Router` it returns composes normally: `.merge()` it into a bigger
-application, layer your own `tower` middleware on top (auth, rate limiting,
-tracing), or serve it as-is.
+`/v1/embeddings`, `/v1/rerank`, `/v1/images`, and `/v1/audio/speech` +
+`/v1/audio/transcriptions` -- each taking the same shape of request
+`PendingXRequest`'s `.with_*()` builders accept, and returning the exact
+response type the matching `Registry` method would. The `Router` it
+returns composes normally: `.merge()` it into a bigger application, layer
+your own `tower` middleware on top (auth, rate limiting, tracing), or
+serve it as-is.
 
 Deliberately not included: tool calling, approval handling, and MCP have no
 JSON wire representation (a `Tool` is arbitrary server-side code), so those
 stay something your server configures directly against `Registry` rather
-than something a client can request; audio endpoints are a tracked
-follow-up. See [`crates/llmprism-axum`](crates/llmprism-axum)'s own README
-for the full route reference and worked `curl` examples.
+than something a client can request. See
+[`crates/llmprism-axum`](crates/llmprism-axum)'s own README for the full
+route reference and worked `curl` examples.
 
 Serving several tenants from one process? `llmprism_axum::routes_multi_tenant(tenant_registry)`
 resolves the `Registry` to use *per request*, from a `tenancy::RequestContext`

@@ -61,11 +61,15 @@ let app = Router::new().merge(llmprism_axum::routes(registry));
   routes return Server-Sent Events built from the same `StreamEvent`s /
   `StructuredStreamEvent`s the non-HTTP `stream()` methods already yield --
   no new streaming logic, just an SSE encoder over an existing stream.
-- **Audio deferred:** `/v1/audio/speech` and `/v1/audio/transcriptions`
-  didn't ship in the first pass -- binary request/response bodies need a
-  deliberate design choice (base64 in JSON vs. multipart vs. raw bytes with
-  a content-type header) that's better made as its own focused follow-up
-  than folded into the rest of Phase 1.
+- **Audio, initially deferred, shipped as a follow-up:** `/v1/audio/speech`
+  and `/v1/audio/transcriptions` didn't ship in the first pass -- binary
+  request/response bodies needed a deliberate design choice (base64 in
+  JSON vs. multipart vs. raw bytes with a content-type header) that was
+  better made as its own focused piece of work than folded into the rest
+  of Phase 1. The answer, once made: base64-encoded strings in the JSON
+  body, matching how `MediaData::Base64` already represents embedded
+  binary media in core -- keeps every route in `llmprism-axum`
+  JSON-in/JSON-out, with no multipart special case for just these two.
 - **Tool calling, approval, and MCP stay out of scope for HTTP.** A
   `Tool` is arbitrary server-side code with a `call()` method -- there's no
   wire representation for a client to send one, so this stays something the
