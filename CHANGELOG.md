@@ -9,8 +9,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-Not yet published to crates.io. See `llmprism-axum`'s own README for
-current status and how to depend on it from git in the meantime.
+## [llmprism-axum 0.1.0] - 2026-08-27
+
+Its first release -- ROADMAP.md's Phases 1 and 3.
 
 ### llmprism-axum
 

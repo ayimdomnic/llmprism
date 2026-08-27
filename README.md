@@ -82,7 +82,7 @@ A few notes on the gaps:
 
 ```toml
 [dependencies]
-llmprism = { version = "0.2", features = ["openai", "anthropic"] }
+llmprism = { version = "0.3", features = ["openai", "anthropic"] }
 ```
 
 Nothing is enabled by default. Every provider lives behind its own Cargo feature
@@ -167,9 +167,7 @@ JSON wire representation (a `Tool` is arbitrary server-side code), so those
 stay something your server configures directly against `Registry` rather
 than something a client can request; audio endpoints are a tracked
 follow-up. See [`crates/llmprism-axum`](crates/llmprism-axum)'s own README
-for the full route reference, worked `curl` examples, and how to depend on
-it (it isn't on crates.io yet -- see that README for why and how to pull it
-from git in the meantime).
+for the full route reference and worked `curl` examples.
 
 Serving several tenants from one process? `llmprism_axum::routes_multi_tenant(tenant_registry)`
 resolves the `Registry` to use *per request*, from a `tenancy::RequestContext`

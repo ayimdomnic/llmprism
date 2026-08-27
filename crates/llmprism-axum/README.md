@@ -1,5 +1,6 @@
 # llmprism-axum
 
+[![Crates.io](https://img.shields.io/crates/v/llmprism-axum.svg)](https://crates.io/crates/llmprism-axum)
 [![docs.rs](https://img.shields.io/docsrs/llmprism-axum)](https://docs.rs/llmprism-axum)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 
@@ -23,13 +24,6 @@ That's the whole integration. `routes(registry)` returns a plain
 `axum::Router` -- merge it into a bigger application with `Router::merge`,
 layer your own `tower` middleware on top (auth, rate limiting, tracing,
 whatever your service already uses), or serve it standalone like above.
-
-> **Status: not yet published to crates.io.** `/v1/structured/stream` and
-> `routes_multi_tenant` both need core `llmprism` APIs
-> (`PendingStructuredRequest::stream`, the `tenancy` module) that are still
-> unreleased -- see [Installing](#installing) for how to depend on this
-> crate from git in the meantime, and [CHANGELOG.md](../../CHANGELOG.md) for
-> when that changes.
 
 ## Routes
 
@@ -131,19 +125,9 @@ through the usual error handling.
 
 ## Installing
 
-Not yet on crates.io (see the status note above). Depend on it directly
-from git until it is:
-
 ```toml
 [dependencies]
-llmprism = { version = "0.2", features = ["openai", "anthropic"] }
-llmprism-axum = { git = "https://github.com/ayimdomnic/llmprism" }
-```
-
-Once published, this becomes an ordinary version dependency like any other:
-
-```toml
-[dependencies]
+llmprism = { version = "0.3", features = ["openai", "anthropic"] }
 llmprism-axum = "0.1"
 ```
 
