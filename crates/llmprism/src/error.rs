@@ -164,6 +164,16 @@ pub enum Error {
     #[cfg(feature = "mcp")]
     #[error("mcp error: {message}")]
     Mcp { message: String },
+
+    /// A backend outside this crate's own control failed -- a
+    /// [`ConversationStore`](crate::persistence::ConversationStore) that
+    /// couldn't load or save conversation history, or (in a future release)
+    /// a tenant-resolution backend that couldn't resolve a tenant.
+    /// `message` is whatever the implementation reported. Unconditional
+    /// (not feature-gated): unlike [`Error::Http`], a store backend has no
+    /// reason to depend on this crate's own `http` feature.
+    #[error("{message}")]
+    Store { message: String },
 }
 
 /// What [`Error::StructuredDecode`] carries about the response that failed to

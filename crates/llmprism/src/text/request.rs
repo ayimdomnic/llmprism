@@ -153,6 +153,15 @@ pub struct TextRequest {
     /// the request body actually sent to the provider. The default,
     /// `Value::Null`, sends nothing extra.
     pub provider_options: serde_json::Value,
+    /// An opaque id correlating this request with a stored conversation,
+    /// for use with
+    /// [`persistence::PersistenceMiddleware`](crate::persistence::PersistenceMiddleware).
+    /// `None` (the default) means this request isn't persisted -- attaching
+    /// a `PersistenceMiddleware` has no effect unless this is set. Not
+    /// interpreted by this crate on its own; a `ConversationStore`
+    /// implementation decides what the id actually means (a database row
+    /// key, a cache key, a file name).
+    pub conversation_id: Option<String>,
 }
 
 impl TextRequest {
@@ -178,6 +187,7 @@ impl TextRequest {
             thinking_budget: None,
             reasoning_effort: None,
             provider_options: serde_json::Value::Null,
+            conversation_id: None,
         }
     }
 }
@@ -410,6 +420,15 @@ impl PendingTextRequest {
     /// and models this applies to.
     pub fn with_reasoning_effort(mut self, effort: impl Into<String>) -> Self {
         self.request.reasoning_effort = Some(effort.into());
+        self
+    }
+
+    /// Opts this request into persistence via a
+    /// [`PersistenceMiddleware`](crate::persistence::PersistenceMiddleware)
+    /// attached to the provider, under `id`. See
+    /// [`TextRequest::conversation_id`].
+    pub fn with_conversation_id(mut self, id: impl Into<String>) -> Self {
+        self.request.conversation_id = Some(id.into());
         self
     }
 
