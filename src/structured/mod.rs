@@ -17,4 +17,4 @@ pub mod response;
 
 pub use repair::RepairStrategy;
 pub use request::{PendingStructuredRequest, StructuredRequest};
-pub use response::StructuredResponse;
+pub use response::{StructuredResponse, StructuredStreamEvent};
