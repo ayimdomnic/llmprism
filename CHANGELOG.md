@@ -34,6 +34,23 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   built yet. `FakeProvider` also gained `stream_structured_once`, reusing the
   existing `respond_with_structured` fixture.
 
+### Changed
+
+- The repo is now a Cargo workspace (`ROADMAP.md`'s Phase 0): this crate
+  lives at `crates/llmprism/` rather than the repo root, with room for
+  framework-adapter crates (`llmprism-axum` and friends) to be published
+  separately later without forcing their dependencies onto everyone. The
+  published package itself (name, version history, public API) is
+  unaffected -- `cargo add llmprism` and everything already written against
+  it keeps working exactly as before. One small, accepted packaging change:
+  the literal `LICENSE` file is no longer bundled inside the published
+  `.crate` archive (Cargo's automatic license-file discovery only looks in
+  the same directory as `Cargo.toml`, and adding `license-file` back
+  explicitly to work around that is what Cargo itself warns against once
+  `license = "MIT"` is already set) -- the SPDX `license = "MIT"` field
+  crates.io reads is untouched, and the real file is still right there in
+  the repository for anyone who wants to read it.
+
 ## [0.2.0] - 2026-08-26
 
 Borrowed from a comparison against Vercel's AI SDK, scoped to what matters

@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Read rust-version from Cargo.toml
         id: msrv
-        run: echo "version=$(grep -m1 '^rust-version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(grep -m1 '^rust-version' crates/llmprism/Cargo.toml | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
