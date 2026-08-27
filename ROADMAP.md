@@ -52,14 +52,24 @@ let app = Router::new().merge(llmprism_axum::routes(registry));
 ```
 
 - **Routes:** one per capability -- `POST /v1/text`, `/v1/structured`,
-  `/v1/moderation`, `/v1/embeddings`, `/v1/rerank`, `/v1/images`,
-  `/v1/audio/speech`, `/v1/audio/transcriptions` -- each accepting roughly
-  the same shape `PendingXRequest` builds, since every request type already
-  derives (or can derive) `Deserialize`.
-- **Streaming:** `/v1/text` with `"stream": true` (or a separate
-  `/v1/text/stream` route) returns Server-Sent Events built from the same
-  `StreamEvent`s `PendingTextRequest::stream()` already yields -- no new
-  streaming logic, just an SSE encoder over an existing stream.
+  `/v1/moderation`, `/v1/embeddings`, `/v1/rerank`, `/v1/images` -- each
+  taking its own request DTO with the wire-safe fields `PendingXRequest`
+  builds from (the request types themselves can't derive `Deserialize`,
+  since several carry trait-object fields like `Vec<Arc<dyn Tool>>` that
+  have no JSON representation).
+- **Streaming:** separate `/v1/text/stream` and `/v1/structured/stream`
+  routes return Server-Sent Events built from the same `StreamEvent`s /
+  `StructuredStreamEvent`s the non-HTTP `stream()` methods already yield --
+  no new streaming logic, just an SSE encoder over an existing stream.
+- **Audio deferred:** `/v1/audio/speech` and `/v1/audio/transcriptions`
+  didn't ship in the first pass -- binary request/response bodies need a
+  deliberate design choice (base64 in JSON vs. multipart vs. raw bytes with
+  a content-type header) that's better made as its own focused follow-up
+  than folded into the rest of Phase 1.
+- **Tool calling, approval, and MCP stay out of scope for HTTP.** A
+  `Tool` is arbitrary server-side code with a `call()` method -- there's no
+  wire representation for a client to send one, so this stays something the
+  server configures directly against `Registry`/`PendingTextRequest`.
 - **Why Axum first:** it's the most-used async web framework in the
   ecosystem right now and composes cleanly via `tower::Service`, which
   keeps the door open for the persistence/auth middleware in later phases

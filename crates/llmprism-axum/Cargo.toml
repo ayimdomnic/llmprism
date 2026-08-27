@@ -1,0 +1,35 @@
+[package]
+name = "llmprism-axum"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+authors = ["Soon To Zen <ayimdomnic@outlook.com>"]
+description = "Axum routes for llmprism -- mount every capability as an HTTP API with one line."
+license = "MIT"
+repository = "https://github.com/ayimdomnic/llmprism"
+readme = "../../README.md"
+keywords = ["llm", "ai", "axum", "http", "api"]
+categories = ["api-bindings", "asynchronous", "web-programming::http-server"]
+
+[dependencies]
+# No features enabled on purpose -- this crate only touches `Registry` and
+# request/response types, none of which need a provider feature. A consumer's
+# own direct `llmprism` dependency (with whichever provider features they
+# enable) unifies with this one via Cargo's normal feature resolution.
+#
+# NOTE: `structured_stream` uses `PendingStructuredRequest::stream`, which
+# landed after crates.io's published 0.2.0 -- so `cargo publish --dry-run`
+# against the registry fails until a new core release ships it. That's
+# expected; this crate isn't published to crates.io yet either (see
+# CHANGELOG.md). Bump this to whatever version actually carries that method
+# before publishing llmprism-axum for real.
+llmprism = { path = "../llmprism", version = "0.2" }
+axum = "0.8"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
