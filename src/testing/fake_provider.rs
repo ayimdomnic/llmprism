@@ -13,7 +13,7 @@ use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
 use crate::rerank::{RerankRequest, RerankResponse};
 use crate::stream_event::StreamEvent;
-use crate::structured::{StructuredRequest, StructuredResponse};
+use crate::structured::{StructuredRequest, StructuredResponse, StructuredStreamEvent};
 use crate::text::{Step, TextRequest};
 
 const DEFAULT_STREAM_CHUNK_WORDS: usize = 1;
@@ -259,6 +259,32 @@ impl Provider for FakeProvider {
         Ok(self
             .structured
             .next(request, &self.name, "structured", "respond_with_structured"))
+    }
+
+    async fn stream_structured_once(
+        &self,
+        request: &StructuredRequest,
+    ) -> Result<BoxStream<'static, Result<StructuredStreamEvent, Error>>, Error> {
+        // No realistic incremental chunking to simulate here -- a fake has
+        // nothing to stream *from* -- so this just hands back the whole
+        // canned response as one `PartialObject` immediately, then `End`.
+        // Reuses the same `respond_with_structured` queue `structured` does,
+        // rather than needing its own fixture builder.
+        let response = self.structured.next(
+            request.clone(),
+            &self.name,
+            "structured",
+            "respond_with_structured",
+        );
+
+        let events = vec![
+            Ok(StructuredStreamEvent::PartialObject {
+                data: response.data.clone(),
+            }),
+            Ok(StructuredStreamEvent::End { response }),
+        ];
+
+        Ok(stream::iter(events).boxed())
     }
 
     async fn moderation(&self, request: ModerationRequest) -> Result<ModerationResponse, Error> {

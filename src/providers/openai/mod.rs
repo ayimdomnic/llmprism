@@ -35,7 +35,7 @@ use crate::images::{ImagesRequest, ImagesResponse};
 use crate::moderation::{ModerationRequest, ModerationResponse};
 use crate::provider::Provider;
 use crate::stream_event::StreamEvent;
-use crate::structured::{StructuredRequest, StructuredResponse};
+use crate::structured::{StructuredRequest, StructuredResponse, StructuredStreamEvent};
 use crate::text::{Step, TextRequest};
 use crate::value_objects::{FinishReason, Meta, ToolCall, Usage};
 
@@ -325,6 +325,116 @@ impl Provider for OpenAiProvider {
             })?;
 
         maps::parse_structured_response(wire_response, self.name())
+    }
+
+    async fn stream_structured_once(
+        &self,
+        request: &StructuredRequest,
+    ) -> Result<BoxStream<'static, Result<StructuredStreamEvent, Error>>, Error> {
+        // OpenAI's `response_format: json_schema` mode streams exactly like a
+        // plain chat completion -- the schema-constrained JSON arrives as
+        // ordinary `choice.delta.content` string fragments, not via
+        // `tool_calls` -- so this reuses the same wire request, the same
+        // `ChatStreamChunk` SSE shape, and the same usage-tracking
+        // `stream_options` flag `stream_text_once` already does.
+        let mut wire_request = maps::build_structured_request(request);
+        wire_request.stream = Some(true);
+        wire_request.stream_options = Some(json!({"include_usage": true}));
+        let body = merge_provider_options(&wire_request, &request.provider_options)?;
+
+        let http_response = self
+            .client
+            .post(format!("{}/chat/completions", self.base_url))
+            .bearer_auth(&self.api_key)
+            .json(&body)
+            .send()
+            .await?;
+
+        let status = http_response.status();
+        if !status.is_success() {
+            let headers = http_response.headers().clone();
+            let body_text = http_response.text().await?;
+            let mapper = ErrorMapper {
+                provider: self.name(),
+            };
+            return Err(mapper.map_error_response(status, &headers, &body_text));
+        }
+
+        let provider_name = self.name().to_string();
+        let mut events = http_response.bytes_stream().eventsource();
+
+        let stream = try_stream! {
+            let mut content = String::new();
+            let mut meta = Meta::default();
+            let mut finish_reason = FinishReason::Stop;
+            let mut usage = Usage::default();
+
+            while let Some(event) = events.next().await {
+                let event = event.map_err(|e| Error::StreamDecode {
+                    provider: provider_name.clone(),
+                    message: e.to_string(),
+                })?;
+
+                let data = event.data.trim();
+                if data.is_empty() || data == "[DONE]" {
+                    continue;
+                }
+
+                let chunk: ChatStreamChunk =
+                    serde_json::from_str(data).map_err(|e| Error::StreamDecode {
+                        provider: provider_name.clone(),
+                        message: e.to_string(),
+                    })?;
+
+                meta = Meta {
+                    id: chunk.id.clone(),
+                    model: chunk.model.clone(),
+                    rate_limits: Vec::new(),
+                };
+
+                if let Some(choice) = chunk.choices.into_iter().next() {
+                    if let Some(delta) = choice.delta.content {
+                        if !delta.is_empty() {
+                            content.push_str(&delta);
+                            // A partial parse failing isn't a stream error --
+                            // `fix_json` is designed to always succeed, but a
+                            // defensive skip here just means this particular
+                            // chunk contributes no preview, not that anything
+                            // is wrong.
+                            let fixed = partial_json_fixer::fix_json(&content);
+                            if let Ok(data) = serde_json::from_str(&fixed) {
+                                yield StructuredStreamEvent::PartialObject { data };
+                            }
+                        }
+                    }
+
+                    if let Some(fr) = choice.finish_reason {
+                        finish_reason = maps::map_finish_reason(&fr);
+                    }
+                }
+
+                if let Some(chunk_usage) = chunk.usage {
+                    usage = maps::map_usage(chunk_usage);
+                }
+            }
+
+            let data: Value = serde_json::from_str(&content).map_err(|e| Error::StructuredDecode {
+                provider: provider_name.clone(),
+                message: e.to_string(),
+                context: Box::new(crate::error::StructuredDecodeContext {
+                    raw: content.clone(),
+                    finish_reason,
+                    usage,
+                    meta: meta.clone(),
+                }),
+            })?;
+
+            yield StructuredStreamEvent::End {
+                response: StructuredResponse { data, finish_reason, usage, meta },
+            };
+        };
+
+        Ok(stream.boxed())
     }
 
     async fn moderation(&self, request: ModerationRequest) -> Result<ModerationResponse, Error> {

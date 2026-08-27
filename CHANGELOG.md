@@ -9,7 +9,18 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Streaming structured output**: `PendingStructuredRequest::stream()` and
+  `Provider::stream_structured_once`, yielding `StructuredStreamEvent::PartialObject`
+  as the model's JSON reply arrives (repaired into valid JSON via the
+  `partial-json-fixer` crate after every chunk) and ending with exactly one
+  `StructuredStreamEvent::End`. Implemented for OpenAI, whose
+  `response_format: json_schema` mode streams identically to a plain chat
+  completion; Anthropic support (a different streaming shape, via
+  `input_json_delta` events on a forced tool call) is a documented gap, not
+  built yet. `FakeProvider` also gained `stream_structured_once`, reusing the
+  existing `respond_with_structured` fixture.
 
 ## [0.2.0] - 2026-08-26
 

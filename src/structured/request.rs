@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
+use async_stream::try_stream;
+use futures::stream::{BoxStream, StreamExt};
+
 use crate::error::Error;
 use crate::provider::Provider;
 use crate::schema::ObjectSchema;
 use crate::value_objects::{Message, UserMessage};
 
 use super::repair::RepairStrategy;
-use super::response::StructuredResponse;
+use super::response::{StructuredResponse, StructuredStreamEvent};
 
 /// The immutable, provider-agnostic shape of one structured-output call. You'll
 /// normally build one with [`PendingStructuredRequest`] rather than
@@ -241,5 +244,34 @@ impl PendingStructuredRequest {
             }),
             None => Err(error),
         }
+    }
+
+    /// Sends the request and returns a stream of [`StructuredStreamEvent`]s
+    /// instead of waiting for the whole reply the way
+    /// [`generate`](Self::generate) does -- each
+    /// [`PartialObject`](StructuredStreamEvent::PartialObject) is a
+    /// best-effort parse of everything generated so far, ending with exactly
+    /// one [`End`](StructuredStreamEvent::End) carrying the same final
+    /// result `generate` would have returned.
+    ///
+    /// Not every provider that supports [`generate`](Self::generate)
+    /// necessarily supports this too -- see [`crate::structured`] for which
+    /// ones do; calling this on one that doesn't returns a stream whose
+    /// first (and only) item is `Err(Error::Unsupported)`.
+    ///
+    /// Unlike [`generate`](Self::generate), no [`RepairStrategy`] is applied
+    /// here: a malformed final reply surfaces as an error on the stream
+    /// itself, the same as any other mid-stream failure.
+    pub fn stream(self) -> BoxStream<'static, Result<StructuredStreamEvent, Error>> {
+        let PendingStructuredRequest { provider, request } = self;
+
+        let stream = try_stream! {
+            let mut inner = provider.stream_structured_once(&request).await?;
+            while let Some(event) = inner.next().await {
+                yield event?;
+            }
+        };
+
+        stream.boxed()
     }
 }
