@@ -1,6 +1,6 @@
 [package]
 name = "llmprism"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 # Not just this crate's own floor (1.65, for `let-else`) -- the `full`
 # dependency tree's highest self-declared `rust-version` is what actually
