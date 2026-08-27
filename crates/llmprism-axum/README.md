@@ -24,8 +24,9 @@ That's the whole integration. `routes(registry)` returns a plain
 layer your own `tower` middleware on top (auth, rate limiting, tracing,
 whatever your service already uses), or serve it standalone like above.
 
-> **Status: not yet published to crates.io.** `/v1/structured/stream` needs
-> a core `llmprism` API (`PendingStructuredRequest::stream`) that's still
+> **Status: not yet published to crates.io.** `/v1/structured/stream` and
+> `routes_multi_tenant` both need core `llmprism` APIs
+> (`PendingStructuredRequest::stream`, the `tenancy` module) that are still
 > unreleased -- see [Installing](#installing) for how to depend on this
 > crate from git in the meantime, and [CHANGELOG.md](../../CHANGELOG.md) for
 > when that changes.
@@ -84,6 +85,37 @@ data, ending with a `StreamEvent::StreamEnd`. If something goes wrong
 partway through, you get `event: error` instead -- HTTP status can't change
 after an SSE response has already started, so a mid-stream failure has to
 be reported as data, not as a failed response.
+
+## Multi-tenancy
+
+Serving several tenants (different API keys, different allowed providers,
+different default models per tenant) from one process? Use
+`routes_multi_tenant` instead of `routes`:
+
+```rust,no_run
+use llmprism::tenancy::StaticTenantRegistry;
+use llmprism::Registry;
+
+#[tokio::main]
+async fn main() {
+    let tenants = StaticTenantRegistry::new()
+        .with_tenant("acme", Registry::from_env())
+        .with_tenant("globex", Registry::from_env());
+
+    let app = llmprism_axum::routes_multi_tenant(tenants);
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+```
+
+Every route now resolves its `Registry` *per request*, from a
+`llmprism::tenancy::RequestContext` (`tenant_id`/`user_id`/free-form
+claims). This crate never establishes that context itself -- attach your
+own auth middleware (a `tower::Layer` or `axum::middleware::from_fn` that
+verifies a JWT/session/API key) in front of these routes, and have it call
+`request.extensions_mut().insert(RequestContext::new(tenant_id))`. A
+request with no context attached gets `401`; an unrecognized tenant maps
+through the usual error handling.
 
 ## What's deliberately not here
 
@@ -162,11 +194,13 @@ route/error/streaming tests written this way.
 
 ## Part of a bigger picture
 
-This is Phase 1 of `llmprism`'s [framework-integration
-roadmap](../../ROADMAP.md): persistence (`ConversationStore`), auth context
-and multi-tenancy, and additional framework adapters (Actix-web, Rocket)
-are planned next, each built once on the framework-agnostic
-`ProviderMiddleware` seam in core rather than reimplemented per adapter.
+This crate builds on `llmprism`'s [framework-integration
+roadmap](../../ROADMAP.md): Phase 1 (this crate's routes), Phase 2
+(`llmprism::persistence`), and Phase 3 (`llmprism::tenancy`, and this
+crate's `routes_multi_tenant`) are all built once on the
+framework-agnostic `ProviderMiddleware` seam in core, rather than
+reimplemented per adapter -- the next framework adapter (Actix-web,
+Rocket, ...) gets the same persistence and multi-tenancy support for free.
 
 ## License
 

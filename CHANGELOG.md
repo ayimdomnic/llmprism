@@ -55,6 +55,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   as the new `Error::Store` rather than being silently swallowed -- real
   database-backed stores (Postgres, Redis, ...) are meant to ship as their
   own separate crates, not bundled here.
+- **Auth context & multi-tenancy** (`ROADMAP.md`'s Phase 3): `RequestContext`
+  (`tenant_id`/`user_id`/free-form `claims`), `TenantRegistry` (resolves a
+  `RequestContext` to the `Registry` that tenant should use) with a
+  `StaticTenantRegistry` reference implementation, and `UsageSink` /
+  `UsageTrackingMiddleware` for recording per-tenant token usage after every
+  round trip. This crate never verifies identity itself -- these are hooks
+  an application's own auth wires into, not a JWT/session implementation.
+  `llmprism-axum` gains a `TenantContext` extractor (reads a `RequestContext`
+  the application's own auth middleware already inserted into the request)
+  and `routes_multi_tenant`, resolving the `Registry` per request instead of
+  serving one fixed one.
 
 ### Changed
 

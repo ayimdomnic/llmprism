@@ -12,11 +12,13 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::Json;
-use llmprism::embeddings::EmbeddingsResponse;
+use llmprism::embeddings::{EmbeddingsResponse, PendingEmbeddingsRequest};
+use llmprism::tenancy::TenantRegistry;
 use llmprism::Registry;
 use serde::Deserialize;
 
 use crate::error::ApiError;
+use crate::tenant::TenantContext;
 
 /// The JSON body for `POST /v1/embeddings`.
 #[derive(Deserialize)]
@@ -34,10 +36,10 @@ pub struct EmbeddingsRequestBody {
     pub dimensions: Option<u32>,
 }
 
-pub(crate) async fn embeddings(
-    State(registry): State<Arc<Registry>>,
-    Json(body): Json<EmbeddingsRequestBody>,
-) -> Result<Json<EmbeddingsResponse>, ApiError> {
+fn build(
+    registry: &Registry,
+    body: EmbeddingsRequestBody,
+) -> Result<PendingEmbeddingsRequest, ApiError> {
     let mut request = registry.embeddings(&body.provider, body.model)?;
     for input in body.input {
         request = request.with_input(input);
@@ -45,6 +47,23 @@ pub(crate) async fn embeddings(
     if let Some(dimensions) = body.dimensions {
         request = request.with_dimensions(dimensions);
     }
-    let response = request.generate().await?;
+    Ok(request)
+}
+
+pub(crate) async fn embeddings(
+    State(registry): State<Arc<Registry>>,
+    Json(body): Json<EmbeddingsRequestBody>,
+) -> Result<Json<EmbeddingsResponse>, ApiError> {
+    let response = build(&registry, body)?.generate().await?;
+    Ok(Json(response))
+}
+
+pub(crate) async fn embeddings_multi_tenant(
+    State(tenants): State<Arc<dyn TenantRegistry>>,
+    TenantContext(context): TenantContext,
+    Json(body): Json<EmbeddingsRequestBody>,
+) -> Result<Json<EmbeddingsResponse>, ApiError> {
+    let registry = tenants.resolve(&context).await?;
+    let response = build(&registry, body)?.generate().await?;
     Ok(Json(response))
 }

@@ -151,6 +151,7 @@ pub mod schema;
 pub mod stream_event;
 pub mod stream_loop;
 pub mod structured;
+pub mod tenancy;
 pub mod testing;
 pub mod text;
 pub mod tool;

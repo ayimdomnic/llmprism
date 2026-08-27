@@ -17,11 +17,13 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::Json;
-use llmprism::rerank::RerankResponse;
+use llmprism::rerank::{PendingRerankRequest, RerankResponse};
+use llmprism::tenancy::TenantRegistry;
 use llmprism::Registry;
 use serde::Deserialize;
 
 use crate::error::ApiError;
+use crate::tenant::TenantContext;
 
 /// The JSON body for `POST /v1/rerank`.
 #[derive(Deserialize)]
@@ -44,10 +46,7 @@ pub struct RerankRequestBody {
     pub return_documents: Option<bool>,
 }
 
-pub(crate) async fn rerank(
-    State(registry): State<Arc<Registry>>,
-    Json(body): Json<RerankRequestBody>,
-) -> Result<Json<RerankResponse>, ApiError> {
+fn build(registry: &Registry, body: RerankRequestBody) -> Result<PendingRerankRequest, ApiError> {
     let mut request = registry
         .rerank(&body.provider, body.model, body.query)?
         .with_documents(body.documents);
@@ -57,6 +56,23 @@ pub(crate) async fn rerank(
     if let Some(return_documents) = body.return_documents {
         request = request.with_return_documents(return_documents);
     }
-    let response = request.generate().await?;
+    Ok(request)
+}
+
+pub(crate) async fn rerank(
+    State(registry): State<Arc<Registry>>,
+    Json(body): Json<RerankRequestBody>,
+) -> Result<Json<RerankResponse>, ApiError> {
+    let response = build(&registry, body)?.generate().await?;
+    Ok(Json(response))
+}
+
+pub(crate) async fn rerank_multi_tenant(
+    State(tenants): State<Arc<dyn TenantRegistry>>,
+    TenantContext(context): TenantContext,
+    Json(body): Json<RerankRequestBody>,
+) -> Result<Json<RerankResponse>, ApiError> {
+    let registry = tenants.resolve(&context).await?;
+    let response = build(&registry, body)?.generate().await?;
     Ok(Json(response))
 }

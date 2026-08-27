@@ -12,11 +12,13 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::Json;
-use llmprism::images::ImagesResponse;
+use llmprism::images::{ImagesResponse, PendingImagesRequest};
+use llmprism::tenancy::TenantRegistry;
 use llmprism::Registry;
 use serde::Deserialize;
 
 use crate::error::ApiError;
+use crate::tenant::TenantContext;
 
 /// The JSON body for `POST /v1/images`.
 #[derive(Deserialize)]
@@ -42,10 +44,7 @@ pub struct ImagesRequestBody {
     pub style: Option<String>,
 }
 
-pub(crate) async fn images(
-    State(registry): State<Arc<Registry>>,
-    Json(body): Json<ImagesRequestBody>,
-) -> Result<Json<ImagesResponse>, ApiError> {
+fn build(registry: &Registry, body: ImagesRequestBody) -> Result<PendingImagesRequest, ApiError> {
     let mut request = registry.images(&body.provider, body.model, body.prompt)?;
     if let Some(count) = body.count {
         request = request.with_count(count);
@@ -59,6 +58,23 @@ pub(crate) async fn images(
     if let Some(style) = body.style {
         request = request.with_style(style);
     }
-    let response = request.generate().await?;
+    Ok(request)
+}
+
+pub(crate) async fn images(
+    State(registry): State<Arc<Registry>>,
+    Json(body): Json<ImagesRequestBody>,
+) -> Result<Json<ImagesResponse>, ApiError> {
+    let response = build(&registry, body)?.generate().await?;
+    Ok(Json(response))
+}
+
+pub(crate) async fn images_multi_tenant(
+    State(tenants): State<Arc<dyn TenantRegistry>>,
+    TenantContext(context): TenantContext,
+    Json(body): Json<ImagesRequestBody>,
+) -> Result<Json<ImagesResponse>, ApiError> {
+    let registry = tenants.resolve(&context).await?;
+    let response = build(&registry, body)?.generate().await?;
     Ok(Json(response))
 }
