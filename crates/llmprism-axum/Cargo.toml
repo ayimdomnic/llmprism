@@ -20,13 +20,15 @@ categories = ["api-bindings", "asynchronous", "web-programming::http-server"]
 # own direct `llmprism` dependency (with whichever provider features they
 # enable) unifies with this one via Cargo's normal feature resolution.
 #
-# NOTE: `structured_stream` uses `PendingStructuredRequest::stream`, which
-# landed after crates.io's published 0.2.0 -- so `cargo publish --dry-run`
-# against the registry fails until a new core release ships it. That's
-# expected; this crate isn't published to crates.io yet either (see
-# CHANGELOG.md). Bump this to whatever version actually carries that method
-# before publishing llmprism-axum for real.
-llmprism = { path = "../llmprism", version = "0.2" }
+# `version` here has to track whatever llmprism actually is locally, not just
+# what this crate happens to use: Cargo enforces a path dependency's
+# `version` requirement even against the local path build (not just once
+# published), so *any* llmprism version bump breaks every sibling crate's
+# build until its own `version` req is updated too -- independent of whether
+# that sibling itself has anything new to say. 0.3 is required here
+# specifically for `PendingStructuredRequest::stream` and the `persistence`/
+# `tenancy` modules this crate's own code already uses.
+llmprism = { path = "../llmprism", version = "0.3" }
 axum = "0.8"
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
