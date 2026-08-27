@@ -25,10 +25,10 @@ categories = ["api-bindings", "asynchronous", "web-programming::http-server"]
 # `version` requirement even against the local path build (not just once
 # published), so *any* llmprism version bump breaks every sibling crate's
 # build until its own `version` req is updated too -- independent of whether
-# that sibling itself has anything new to say. 0.3 is required here
-# specifically for `PendingStructuredRequest::stream` and the `persistence`/
-# `tenancy` modules this crate's own code already uses.
-llmprism = { path = "../llmprism", version = "0.3" }
+# that sibling itself has anything new to say. Bump this every time
+# crates/llmprism/Cargo.toml's version changes, before running
+# scripts/release.sh for either crate.
+llmprism = { path = "../llmprism", version = "0.4" }
 axum = "0.8"
 futures = "0.3"
 serde = { version = "1", features = ["derive"] }
